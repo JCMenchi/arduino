@@ -1,6 +1,6 @@
 {
     "board": "arduino:avr:uno",
-    "sketch": "SerialInterface/SerialInterface.ino",
+    "sketch": "Bee/Bee.ino",
     "port": "/dev/ttyACM0",
     "programmer": "avrisp"
 }
