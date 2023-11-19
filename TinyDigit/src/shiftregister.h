@@ -1,18 +1,19 @@
+#ifndef shiftregister_h
+#define shiftregister_h
+
 #include <Arduino.h>
 
 class SimpleShiftRegister
 {
 public:
     SimpleShiftRegister(uint8_t data, uint8_t latch, uint8_t clock)
-        : dataPin(data), latchPin(latch), clockPin(clock), printer(NULL)
+        : dataPin(data), latchPin(latch), clockPin(clock)
     {
         memset(state, 0, 8);
     }
 
-    void setup(Print *p = NULL)
+    void setup()
     {
-        this->printer = p;
-
         pinMode(this->dataPin, OUTPUT);
         pinMode(this->latchPin, OUTPUT);
         pinMode(this->clockPin, OUTPUT);
@@ -26,18 +27,7 @@ public:
     {
         if (pos >= 8)
         {
-            if (printer)
-            {
-                printer->print("SimpleShiftRegister:toggleBit out of range error: ");
-                printer->println(pos);
-            }
             return;
-        }
-
-        if (printer)
-        {
-            printer->print("Toggle ");
-            printer->println(pos);
         }
 
         if (state[pos] == 0)
@@ -65,7 +55,6 @@ public:
 
     void setMask(uint8_t v)
     {
-
         for (int i = 0; i < 8; i++)
         {
             this->state[i] = bitRead(v, i);
@@ -93,11 +82,6 @@ public:
     {
         if (pos >= 8)
         {
-            if (printer)
-            {
-                printer->print("SimpleShiftRegister:setState out of range error: ");
-                printer->println(pos);
-            }
             return;
         }
 
@@ -108,33 +92,10 @@ public:
     {
         if (pos >= 8)
         {
-            if (printer)
-            {
-                printer->print("SimpleShiftRegister:getState out of range error: ");
-                printer->println(pos);
-            }
             return 0;
         }
 
         return this->state[pos];
-    }
-
-    void print() const
-    {
-        if (printer)
-        {
-            printer->print("ShiftRegister state: ");
-            for (int i = 7; i >= 0; i--)
-            {
-                printer->print(this->getState(i));
-                printer->print(" ");
-            }
-            printer->print(" DEC ");
-            printer->print(this->getMask());
-            printer->print(" HEX ");
-            printer->print(this->getMask(), 16);
-            printer->println("");
-        }
     }
 
     void allLow()
@@ -160,5 +121,6 @@ private:
     uint8_t latchPin;
     uint8_t clockPin;
     uint8_t state[8];
-    Print *printer;
 };
+
+#endif

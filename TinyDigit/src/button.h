@@ -1,3 +1,6 @@
+#ifndef button_h
+#define button_h
+
 #include <Arduino.h>
 
 class AbstractButton 
@@ -37,14 +40,12 @@ const int DEBOUNCE_DELAY = 200;
 class SimpleButton : AbstractButton
 {
 public:
-    explicit SimpleButton(uint8_t p) : pin(p), printer(NULL) {
+    explicit SimpleButton(uint8_t p) : pin(p) {
         buttonPressed = false;
     }
 
-    void setup(Print *p = NULL)
+    void setup()
     {
-        this->printer = p;
-
         // setup button interrupt
         pinMode(this->pin, INPUT_PULLUP);
 
@@ -72,6 +73,6 @@ private:
     unsigned long lastInterrupt = 0;
     uint8_t pin;
     volatile uint8_t buttonPressed;
-    Print *printer;
 };
 
+#endif
