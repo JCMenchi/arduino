@@ -1,9 +1,11 @@
 #include <Arduino.h>
 
+#include "digit.h"
 #include "shiftregister.h"
 #include "button.h"
 #include "frame.h"
 #include "modeselector.h"
+#include "rolldice.h"
 
 // declare a button
 const uint8_t BUTTON_PIN = PB2;
@@ -28,7 +30,7 @@ void setup() {
   // setup button interrupt
   button.setup();
 
-  // setup analog
+  // setup mode selector
   modeSelector.setup();
 
   // seed for random
@@ -36,114 +38,57 @@ void setup() {
   randomSeed(micros());
 }
 
-// Count number of time button is pressed
-uint8_t count = 0;
-void countButtonPress() {
-  shiftreg.setMask(numberToRegister[count]);
-  count += 1;
-  if (count >= 10) {
-    count = 0;
-  }
-}
-
-// rool virtual dice
-void rolldice() {
-    const int period = 100;
-    // blink red LED to sim rolling
-    shiftreg.setMask(1);
-    delay(period);
-    shiftreg.setMask(0);
-    delay(period);
-    shiftreg.setMask(1);
-    delay(period);
-    shiftreg.setMask(0);
-    delay(period);
-    shiftreg.setMask(1);
-    delay(period);
-    shiftreg.setMask(0);
-    delay(period);
-    shiftreg.setMask(1);
-    delay(period);
-    shiftreg.setMask(0);
-    delay(period);
-    shiftreg.setMask(1);
-    delay(period);
-    shiftreg.setMask(0);
-    delay(period);
-
-    int num = random(10);
-    shiftreg.setMask(numberToRegister[num]);
-}
-
-void runFrame(const uint16_t* frame, boolean loop = false) {
-  int i = 0;
-  int red = 1;
-  while (frame[i] != 256) {
-    shiftreg.setMask(frame[i]+red);
-    delay(200);
-    i++;
-    if (red) {
-      red = 0;
-    } else {
-      red = 1;
-    }
-    if (frame[i] == 256) {
-      i = 0;
-      if (!loop) {
-        break;
-      }
-    }
-
-    if (button.isPressed()) {
-      shiftreg.setMask(0);
-      button.reset();
-      break;
-    }
-  }
-
-  shiftreg.setMask(numberToRegister[modeSelector.mode()]);
-}
-
-
 // Main loop
 void loop() {
   
+  // check if new mode is selected
   int8_t idx = modeSelector.update();
   if (idx != -1) {
     shiftreg.setMask(numberToRegister[idx]);
   }
 
+  // wait for button pressed
   if (button.isPressed()) {
+    // enter mode main loop
     button.reset();
 
     if (modeSelector.mode() == 0) {
-      runFrame(circleFrames);
+      // MODE 0: turn off all LED
+      shiftreg.setMask(0);
     } else if (modeSelector.mode() == 1) {
-      runFrame(circle2Frames);
+      // MODE 1: turn on all LED
+      shiftreg.setMask(0xFF);
     } else if (modeSelector.mode() == 2) {
-      runFrame(circle2Frames);
+      // MODE 2: execute animation step by step
+      runFrameByStep(snakeFrames, &shiftreg, &button);
+      shiftreg.setMask(numberToRegister[modeSelector.mode()]);
     } else if (modeSelector.mode() == 3) {
-      rolldice();
+      // MODE 3: execute same animation once
+      runFrame(snakeFrames, &shiftreg, &button);
+      shiftreg.setMask(numberToRegister[modeSelector.mode()]);
     } else if (modeSelector.mode() == 4) {
-      runFrame(snakeFrames);
+      // MODE 4: execute same animation in loop
+      runFrame(snakeFrames, &shiftreg, &button, true);
+      shiftreg.setMask(numberToRegister[modeSelector.mode()]);
     } else if (modeSelector.mode() == 5) {
-      shiftreg.setMask(numberToRegister[5]+1);
-      delay(200);
-      shiftreg.setMask(numberToRegister[5]);
-      delay(200);
-      shiftreg.setMask(numberToRegister[5]+1);
-      delay(200);
-      shiftreg.setMask(numberToRegister[5]);
-      delay(200);
-      shiftreg.setMask(numberToRegister[5]+1);
+      // MODE 5: simulate rolling a 6 side dice
+      rolldice(&shiftreg, 6);
     } else if (modeSelector.mode() == 6) {
-      runFrame(circleFrames, true);
+      // MODE 6: 
+      runFrame(circleFrames , &shiftreg, &button, false);
+      shiftreg.setMask(numberToRegister[modeSelector.mode()]);
     } else if (modeSelector.mode() == 7) {
-      runFrame(circle2Frames, true);
+      // MODE 7: 
+      runFrame(circle2Frames , &shiftreg, &button, false);
+      shiftreg.setMask(numberToRegister[modeSelector.mode()]);
     } else if (modeSelector.mode() == 8) {
-      runFrame(circle2Frames, true);
+      // MODE 8: 
+      runFrame(circleFrames, &shiftreg, &button, true);
+      shiftreg.setMask(numberToRegister[modeSelector.mode()]);
     } else if (modeSelector.mode() == 9) {
-      runFrame(snakeFrames, true);
+      // MODE 9: 
+      runFrame(circle2Frames, &shiftreg, &button, true);
+      shiftreg.setMask(numberToRegister[modeSelector.mode()]);
     }
   }
 }
