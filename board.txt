@@ -1,0 +1,9 @@
+
+taille 9cm x 7 cm
+
+larguer 26 trous A->Z
+
+longeur 32 = 26 + 6  A->Z A -> E
+
+trou 2 mm cuivre 1 mm trou
+

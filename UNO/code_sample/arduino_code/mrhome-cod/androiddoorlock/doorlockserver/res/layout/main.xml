@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ ! Excerpted from "Programming Your Home",
+ ! published by The Pragmatic Bookshelf.
+ ! Copyrights apply to this code. It may not be used to create training material, 
+ ! courses, books, articles, and the like. Contact us if you are in doubt.
+ ! We make no guarantees that this code is fit for any purpose. 
+ ! Visit http://www.pragmaticprogrammer.com/titles/mrhome for more book information.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent">
+    
+    <LinearLayout
+    	android:orientation="horizontal"
+    	android:layout_width="fill_parent"
+    	android:layout_height="fill_parent">
+
+		<FrameLayout
+			android:id="@+id/camera_preview"
+			android:layout_width="fill_parent"
+    		android:layout_height="fill_parent"
+    		android:layout_weight="1.0"/>
+    		
+    		
+    	<LinearLayout
+    		android:orientation="vertical"
+            android:layout_width="wrap_content"
+            android:layout_height="fill_parent"
+            android:background="@drawable/back">
+            
+            <LinearLayout
+	    		android:orientation="vertical"
+	            android:layout_width="wrap_content"
+	            android:layout_height="fill_parent"
+	            android:layout_weight="0.5"
+	            android:gravity="top">
+            
+	            <ToggleButton
+	            	android:id="@+id/toggle"
+	                android:layout_width="wrap_content"
+	                android:layout_height="wrap_content" 
+	                />
+	            <EditText android:text="8000" android:id="@+id/port" android:layout_width="wrap_content" android:layout_height="wrap_content"></EditText>    
+	        </LinearLayout>
+            
+            <LinearLayout
+	    		android:orientation="vertical"
+	            android:layout_width="wrap_content"
+	            android:layout_height="fill_parent"
+	            android:layout_weight="0.5"
+	            android:gravity="bottom">
+            
+	            <Button android:text="Photo" android:id="@+id/takepicture" android:layout_width="wrap_content" android:layout_height="wrap_content"></Button>
+	        </LinearLayout>
+	                
+        </LinearLayout>
+    	
+    </LinearLayout>
+
+</LinearLayout>
