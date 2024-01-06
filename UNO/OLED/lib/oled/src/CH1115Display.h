@@ -93,6 +93,7 @@ private:
         uint8_t yoffset;
     };
 
+    void setAddress(uint8_t x, uint8_t y);
     void update();
     void drawChar(uint8_t x, uint8_t y, unsigned char c, uint8_t color, uint8_t bg);
 

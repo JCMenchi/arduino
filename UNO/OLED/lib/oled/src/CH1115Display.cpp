@@ -5,19 +5,6 @@
 #define TWI_BUFFER_LENGTH 10
 #include <Wire.h>
 
-// CH1115 display addressing
-// Display is divided in pages each page has a height of 8 pixels
-
-// Specifies column address of display RAM. Divide the column address into 4 higher bits and 4 lower bits. Set each of them into
-// successions. When the microprocessor repeats to access to the display RAM, the column address counter is incremented
-// during each access until address 127 is accessed. The page address is not changed during this time.
-#define CH1115_SET_COLADD_LSB 0x00 // 1. Set Lower Column Address: (00H - 0FH)
-#define CH1115_SET_COLADD_MSB 0x10 // 2. Set Higher Column Address: (10H – 1FH)
-// 19. Set Page Address: (B0H - B7H)
-// Specifies page address to load display RAM data to page address register. Any RAM data bit can be accessed when its
-// page address and column address are specified. The display remains unchanged even when the page address is changed.
-// 4 lower bits are used to select the page from 0 to 7
-#define CH1115_SET_PAGEADD 0xB0
 
 #define CH1115_Swap(a, b) {uint8_t t = a;a = b;b = t;}
 
@@ -71,8 +58,8 @@ void CH1115Display::init(uint8_t contrast)
     Serial.print("Screen status register: ");
     Serial.println(u, 16);
 
+    // set normal display mode
     send_command(0xA4);
-    send_command(0xA5);
 
     this->contrast(contrast);
 }
@@ -269,9 +256,7 @@ void CH1115Display::drawScreen(uint8_t pattern)
 {
     for (uint8_t page = 0; page < (_height / 8); page++)
     {
-        send_command(CH1115_SET_COLADD_LSB | 0x00);
-        send_command(CH1115_SET_COLADD_MSB | 0x00);
-        send_command(CH1115_SET_PAGEADD | page);
+        setAddress(0, page*8);
 
         for (uint8_t i = 0; i < _width; i++)
         {
@@ -301,27 +286,47 @@ void CH1115Display::drawPixelBuf(uint8_t x, uint8_t y, uint8_t colour)
     }
 }
 
+// CH1115 display addressing
+// Display is divided in pages each page has a height of 8 pixels
+
+// Specifies column address of display RAM. Divide the column address into 4 higher bits and 4 lower bits. Set each of them into
+// successions. When the microprocessor repeats to access to the display RAM, the column address counter is incremented
+// during each access until address 127 is accessed. The page address is not changed during this time.
+#define CH1115_SET_COLADD_LSB 0x00 // 1. Set Lower Column Address: (00H - 0FH)
+#define CH1115_SET_COLADD_MSB 0x10 // 2. Set Higher Column Address: (10H – 1FH)
+// 19. Set Page Address: (B0H - B7H)
+// Specifies page address to load display RAM data to page address register. Any RAM data bit can be accessed when its
+// page address and column address are specified. The display remains unchanged even when the page address is changed.
+// 4 lower bits are used to select the page from 0 to 7
+#define CH1115_SET_PAGEADD 0xB0
+void CH1115Display::setAddress(uint8_t x, uint8_t y) {
+    Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
+    // start read modify write
+    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
+    Wire.write(CH1115_SET_PAGEADD | (y/8));
+    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
+    Wire.write(CH1115_SET_COLADD_LSB | (x & 0x0F));
+    Wire.write(0x00); // command start D/C bit is 0, no continuous (0000 0000)
+    Wire.write(CH1115_SET_COLADD_MSB | ((x & 0xF0) >> 4));
+    Wire.endTransmission(); // switch to reception mode
+}
+
 void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
-    if ((x >= this->_buffer->width) || (y >= this->_buffer->height))
+    if ((x >= this->_width) || (y >= this->_height))
     {
         return;
     }
 
+    setAddress(x,y);
+
     Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
-
-    // Set address
-    Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
-    Wire.write(CH1115_SET_COLADD_LSB | (x & 0x0F));
-    Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
-    Wire.write(CH1115_SET_COLADD_MSB | (x>>4));
-    Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
-    Wire.write(CH1115_SET_PAGEADD | (y/8));
-
     // start read modify write
     Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
     Wire.write(0xE0);
+    Wire.endTransmission(); // switch to reception mode
 
     // request data
+    Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
     Wire.write(0x40);
     Wire.endTransmission(); // switch to reception mode
 
@@ -337,13 +342,13 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
     switch (colour)
     {
     case CH1115_WHITE_COLOR:
-        r |= (1 << (y & 7));
+        r |= (1 << (y % 8));
         break;
     case CH1115_BLACK_COLOR:
-        r &= ~(1 << (y & 7));
+        r &= ~(1 << (y % 8));
         break;
     case CH1115_INVERSE_COLOR:
-        r ^= (1 << (y & 7));
+        r ^= (1 << (y % 8));
         break;
     }
     Wire.write(r);
@@ -369,21 +374,12 @@ void CH1115Display::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uin
         CH1115_Swap(y0, y1);
     }
 
-    int16_t dx, dy;
+    uint8_t dx, dy;
     dx = x1 - x0;
     dy = abs(y1 - y0);
 
-    int16_t err = dx / 2;
-    int16_t ystep;
-
-    if (y0 < y1)
-    {
-        ystep = 1;
-    }
-    else
-    {
-        ystep = -1;
-    }
+    int8_t err = dx / 2;
+    int8_t ystep = (y0 < y1)?1:-1;
 
     for (; x0 <= x1; x0++)
     {
@@ -468,9 +464,8 @@ void CH1115Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh, con
         {
             continue;
         }
-        send_command(CH1115_SET_COLADD_LSB | (x & 0x0F));
-        send_command(CH1115_SET_COLADD_MSB | ((x & 0xF0) >> 4));
-        send_command(CH1115_SET_PAGEADD | page++);
+        setAddress(x, page*8);
+        page++;
 
         for (uint8_t tx = 0; tx < sw; tx++)
         {
@@ -488,7 +483,6 @@ void CH1115Display::update()
 {
     uint8_t tx, ty;
     uint16_t offset = 0;
-    uint8_t column = this->_buffer->xoffset;
     uint8_t page = this->_buffer->yoffset / 8;
 
     for (ty = 0; ty < this->_buffer->height; ty = ty + 8)
@@ -498,9 +492,8 @@ void CH1115Display::update()
             continue;
         }
 
-        send_command(CH1115_SET_COLADD_LSB | (column & 0x0F));
-        send_command(CH1115_SET_COLADD_MSB | ((column & 0XF0) >> 4));
-        send_command(CH1115_SET_PAGEADD | page++);
+        setAddress(this->_buffer->xoffset, page*8);
+        page++;
 
         for (tx = 0; tx < this->_buffer->width; tx++)
         {
