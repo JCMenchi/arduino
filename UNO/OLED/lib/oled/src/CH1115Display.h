@@ -4,7 +4,8 @@
 #include "Arduino.h"
 
 // Default I2C address is 0x3C or 0x3D if SA0 input is set high
-#define CH1115_I2C_SCREEN_ADDRESS 0x3C
+#define CH1115_I2C_ADDRESS 0x3C
+#define CH1115_DEVICE_ID 0x15
 
 // Display Pixel colours  definition
 #define CH1115_WHITE_COLOR 0
@@ -34,6 +35,9 @@
 #define CH1115_SCROLL_64FRAMES 0x02
 #define CH1115_SCROLL_128FRAMES 0x03
 
+// uncomment to active double buffer
+//#define BACK_BUFFER
+
 class CH1115Display
 {
 public:
@@ -59,12 +63,16 @@ public:
 
     void drawString(uint8_t x, uint8_t y, const char *pText);
     void drawPixel(uint8_t x, uint8_t y, uint8_t color);
-    void drawPixelBuf(uint8_t x, uint8_t y, uint8_t color);
     void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);
-    
     void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *data);
     
+#ifdef BACK_BUFFER
+    void drawPixelBuf(uint8_t x, uint8_t y, uint8_t color);
+#endif
+
 private:
+
+#ifdef BACK_BUFFER
     class PageBuffer
     {
     public:
@@ -92,15 +100,18 @@ private:
         uint8_t xoffset;
         uint8_t yoffset;
     };
+    void update();
+    PageBuffer *_buffer;
+#endif
 
     void setAddress(uint8_t x, uint8_t y);
-    void update();
-    void drawChar(uint8_t x, uint8_t y, unsigned char c, uint8_t color, uint8_t bg);
-
+    
     void send_data(uint8_t data);
+    void start_data(uint8_t byte);
+    void add_data(uint8_t byte);
+    void stop_data(uint8_t byte);
     void send_command(uint8_t command);
 
-    PageBuffer *_buffer;
     uint8_t _height;
     uint8_t _width;
 };

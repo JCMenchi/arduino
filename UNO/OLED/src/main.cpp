@@ -40,7 +40,6 @@ void setup()
   // init OLED display
   ch1115.init(0x01);
   ch1115.flip(CH1115_ON);
-  ch1115.drawScreen(0x00);
 
   drawScene();
 }
@@ -130,8 +129,7 @@ void loop()
         curline = 0;
       }
       reset_line();
-      Serial.print("Curline: ");
-      Serial.println(curline);
+      ch1115.drawString(0, curline*8, line_buffer);
     } else if (c == 27) { // escape
       escape = true;
       delay(1); // delay to ensure esc sequence is available
@@ -157,10 +155,10 @@ void loop()
           line_buffer[MAX_COLUMN] = 0;
           textpos = 0;
         }
+        ch1115.drawString(0, curline*8, line_buffer);
         command(c);
       }
     }
-    
   }
 
   if (escape) {
@@ -168,5 +166,4 @@ void loop()
     Serial.println(escape_buffer);
     esccommand(escape_buffer);
   }
-  //ch1115.drawString(0, curline*8, line_buffer);
 }
