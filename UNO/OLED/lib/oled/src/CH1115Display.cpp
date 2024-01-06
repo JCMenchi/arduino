@@ -60,6 +60,8 @@ void CH1115Display::init(uint8_t contrast)
 
     // set normal display mode
     send_command(0xA4);
+    // turn on
+    send_command(0xAF);
 
     this->contrast(contrast);
 }
@@ -80,7 +82,6 @@ void CH1115Display::enable(uint8_t on)
 {
     send_command(on?0xAF:0xAE);
 }
-
 
 // 4. Additional Horizontal Scroll Setup: (Three Bytes Command)
 // This command consists of 3 consecutive bytes to set up the horizontal scroll parameters. It determined the scrolling start
@@ -129,7 +130,6 @@ void CH1115Display::scrollArea(uint8_t startPage, uint8_t endPage, uint8_t start
     send_command(nbFrame);
     send_command(endPage<8?endPage:7);
 }
-
 // 6. Set Scroll Mode: (28H – 2BH)
 // Control continuous or single screen scroll.
 //         | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 |
@@ -184,7 +184,6 @@ void CH1115Display::scroll(uint8_t mode)
 // By using this command to set eight bits of data to the contrast data register; the OLED segment output assumes one of the
 // 256 current levels.
 // When this command is input, the contrast control mode is released after the contrast data register has been set.//
-
 // When the contrast control function is not used, set the D7 - D0 to 10000000.
 void CH1115Display::contrast(uint8_t contrast)
 {
@@ -252,6 +251,31 @@ void CH1115Display::invert(uint8_t on)
     send_command(on?0xA7:0xA6);
 }
 
+// CH1115 display addressing
+// Display is divided in pages each page has a height of 8 pixels
+
+// Specifies column address of display RAM. Divide the column address into 4 higher bits and 4 lower bits. Set each of them into
+// successions. When the microprocessor repeats to access to the display RAM, the column address counter is incremented
+// during each access until address 127 is accessed. The page address is not changed during this time.
+#define CH1115_SET_COLADD_LSB 0x00 // 1. Set Lower Column Address: (00H - 0FH)
+#define CH1115_SET_COLADD_MSB 0x10 // 2. Set Higher Column Address: (10H – 1FH)
+// 19. Set Page Address: (B0H - B7H)
+// Specifies page address to load display RAM data to page address register. Any RAM data bit can be accessed when its
+// page address and column address are specified. The display remains unchanged even when the page address is changed.
+// 4 lower bits are used to select the page from 0 to 7
+#define CH1115_SET_PAGEADD 0xB0
+void CH1115Display::setAddress(uint8_t x, uint8_t y) {
+    Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
+    // start read modify write
+    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
+    Wire.write(CH1115_SET_PAGEADD | (y/8));
+    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
+    Wire.write(CH1115_SET_COLADD_LSB | (x & 0x0F));
+    Wire.write(0x00); // command start D/C bit is 0, no continuous (0000 0000)
+    Wire.write(CH1115_SET_COLADD_MSB | ((x & 0xF0) >> 4));
+    Wire.endTransmission(); // switch to reception mode
+}
+
 void CH1115Display::drawScreen(uint8_t pattern)
 {
     for (uint8_t page = 0; page < (_height / 8); page++)
@@ -286,31 +310,6 @@ void CH1115Display::drawPixelBuf(uint8_t x, uint8_t y, uint8_t colour)
     }
 }
 
-// CH1115 display addressing
-// Display is divided in pages each page has a height of 8 pixels
-
-// Specifies column address of display RAM. Divide the column address into 4 higher bits and 4 lower bits. Set each of them into
-// successions. When the microprocessor repeats to access to the display RAM, the column address counter is incremented
-// during each access until address 127 is accessed. The page address is not changed during this time.
-#define CH1115_SET_COLADD_LSB 0x00 // 1. Set Lower Column Address: (00H - 0FH)
-#define CH1115_SET_COLADD_MSB 0x10 // 2. Set Higher Column Address: (10H – 1FH)
-// 19. Set Page Address: (B0H - B7H)
-// Specifies page address to load display RAM data to page address register. Any RAM data bit can be accessed when its
-// page address and column address are specified. The display remains unchanged even when the page address is changed.
-// 4 lower bits are used to select the page from 0 to 7
-#define CH1115_SET_PAGEADD 0xB0
-void CH1115Display::setAddress(uint8_t x, uint8_t y) {
-    Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
-    // start read modify write
-    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
-    Wire.write(CH1115_SET_PAGEADD | (y/8));
-    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
-    Wire.write(CH1115_SET_COLADD_LSB | (x & 0x0F));
-    Wire.write(0x00); // command start D/C bit is 0, no continuous (0000 0000)
-    Wire.write(CH1115_SET_COLADD_MSB | ((x & 0xF0) >> 4));
-    Wire.endTransmission(); // switch to reception mode
-}
-
 void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
     if ((x >= this->_width) || (y >= this->_height))
     {
@@ -321,12 +320,9 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
 
     Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
     // start read modify write
-    Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    Wire.write(0x80); // command D/C bit is 0, with continuation (1000 0000)
     Wire.write(0xE0);
-    Wire.endTransmission(); // switch to reception mode
-
     // request data
-    Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
     Wire.write(0x40);
     Wire.endTransmission(); // switch to reception mode
 
@@ -337,7 +333,7 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
 
     // update bit
     Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
-    Wire.write(0xC0);
+    Wire.write(0xC0); // data followed by command D/C bit is 0, continuation is 1 (1100 0000)
 
     switch (colour)
     {
@@ -354,7 +350,7 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
     Wire.write(r);
 
     // stop read modify write
-    Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    Wire.write(0x00); // command D/C bit is 0 (0000 0000)
     Wire.write(0xEE); 
     Wire.endTransmission();
 }
@@ -456,16 +452,13 @@ void CH1115Display::drawString(uint8_t x, uint8_t y, const char *pText)
 
 void CH1115Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh, const uint8_t *data)
 {
-    uint8_t page = y / 8;
-
     for (uint8_t ty = 0; ty < sh; ty = ty + 8)
     {
         if (y + ty >= _height)
         {
             continue;
         }
-        setAddress(x, page*8);
-        page++;
+        setAddress(x, ty);
 
         for (uint8_t tx = 0; tx < sw; tx++)
         {
@@ -510,7 +503,7 @@ void CH1115Display::update()
 void CH1115Display::send_command(uint8_t command)
 {
     Wire.beginTransmission(CH1115_I2C_SCREEN_ADDRESS);
-    Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    Wire.write(0x00); // command start D/C bit is 0 and no continuation (0000 0000)
     uint8_t rc = Wire.write(command);
     rc = Wire.endTransmission(true);
 

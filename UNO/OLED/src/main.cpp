@@ -19,29 +19,66 @@ void reset_line() {
   textpos = 2;
 }
 
+uint8_t xcursor = 40;
+uint8_t ycursor = 28;
+
+void drawScene() {
+  ch1115.drawScreen(0x00);
+  ch1115.drawString(xcursor, ycursor, "Welcome");
+  return;
+  ch1115.drawLine(0,0,127,0, CH1115_WHITE_COLOR);
+  ch1115.drawLine(127,0,127,63, CH1115_WHITE_COLOR);
+  ch1115.drawLine(127,63,0,63, CH1115_WHITE_COLOR);
+  ch1115.drawLine(0,63,0,0,CH1115_WHITE_COLOR);
+}
+
 void setup()
 {
   reset_line();
   Serial.begin(115200);
-  Serial.println(F("screen init"));
 
   // init OLED display
   ch1115.init(0x01);
-  ch1115.enable(CH1115_ON);
   ch1115.flip(CH1115_ON);
   ch1115.drawScreen(0x00);
 
-  // draw some text
-  ch1115.drawString(0, 0, (char*)"the quick brown fox, ");
-  ch1115.drawString(0, 8, (char*)"jumps over the lazy dog");
-  ch1115.drawString(0, 16, (char*)"jumps over the lazy dog");
-  ch1115.drawString(0, 24, (char*)"jumps over the lazy dog");
-  ch1115.drawString(0, 32, (char*)"A B C D E F G H I J K L ");
-  ch1115.drawString(0, 40, (char*)"M N O P Q R S T U V W X ");
-  ch1115.drawString(0, 48, (char*)"Y Z 0 1 2 3 4 5 6 7 8 9 ");
-  ch1115.drawString(0, 56, (char*)"Y Z 0 1 2 3 4 5 6 7 8 9 ");
+  drawScene();
+}
 
-  
+void esccommand(const char* escape_buffer) {
+
+    if (escape_buffer[0] == '[') {
+      // arrow
+      if (escape_buffer[1] == 'C') {
+        // right
+        xcursor += 8;
+      } else if (escape_buffer[1] == 'D') {
+        // left
+        xcursor = (xcursor?xcursor-8:0);
+      } else if (escape_buffer[1] == 'A') {
+        // up
+        ycursor = (ycursor?ycursor-8:0);
+      } else if (escape_buffer[1] == 'B') {
+        // down
+        ycursor += 8;
+      } else if (escape_buffer[1] == 'H') {
+        // beg line
+        xcursor = 0;
+      } else if (escape_buffer[1] == 'F') {
+        // end line
+        xcursor = 120;
+      } else if (escape_buffer[1] == '5' && escape_buffer[2] == '~') {
+        // page up
+        ycursor = 0;
+      } else if (escape_buffer[1] == '6' && escape_buffer[2] == '~') {
+        // page down
+        ycursor = 56;
+      }
+      if (xcursor > 120) xcursor = 120;
+      if (ycursor > 56) ycursor = 56;
+
+      drawScene();
+    }
 }
 
 void command(char c) {
@@ -86,8 +123,6 @@ void loop()
   while (Serial.available()) {
     readchar++;
     char c = Serial.read();
-    Serial.print("Get char: ");
-    Serial.println(c, 10);
     if (c == '\n' || c == '\r') {
       ch1115.drawString(0, curline*8, line_buffer);
       curline++;
@@ -99,7 +134,7 @@ void loop()
       Serial.println(curline);
     } else if (c == 27) { // escape
       escape = true;
-      Serial.println("Start escape");
+      delay(1); // delay to ensure esc sequence is available
     } else if (c == '\b' || c == 127) { // backspace or delete
       textpos--;
       if (textpos < 2) {
@@ -122,8 +157,8 @@ void loop()
           line_buffer[MAX_COLUMN] = 0;
           textpos = 0;
         }
+        command(c);
       }
-      command(c);
     }
     
   }
@@ -131,11 +166,7 @@ void loop()
   if (escape) {
     Serial.print("Current ESC buffer: ");
     Serial.println(escape_buffer);
+    esccommand(escape_buffer);
   }
-  if (readchar) {
-    Serial.print(readchar);
-    Serial.print(" Current line buffer: ");
-    Serial.println(line_buffer);
-  }
-  ch1115.drawString(0, curline*8, line_buffer);
+  //ch1115.drawString(0, curline*8, line_buffer);
 }
