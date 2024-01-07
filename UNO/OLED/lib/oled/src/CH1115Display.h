@@ -60,6 +60,7 @@ public:
     
     // Full screen update
     void drawScreen(uint8_t pattern, bool border = false);
+    void drawPage(uint8_t p, uint8_t pattern);
 
     // Drawing
     void startPageDrawing(uint8_t x, uint8_t y);

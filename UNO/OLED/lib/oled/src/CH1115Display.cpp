@@ -313,24 +313,50 @@ void CH1115Display::drawScreen(uint8_t pattern, bool border)
         TinyI2C.start(CH1115_I2C_ADDRESS, 0);
         for (uint8_t i = 0; i < _width; i++)
         {
-            TinyI2C.write((i<(_width-1))?0xC0:0x40);
-            if (border && i == 0) {
+            TinyI2C.write((i < (_width - 1)) ? 0xC0 : 0x40);
+            if (border && i == 0)
+            {
                 TinyI2C.write(0xFF);
-            } else if (border && i == (_width-1)) {
+            }
+            else if (border && i == (_width - 1))
+            {
                 TinyI2C.write(0xFF);
-            } else if (border && page == 0) {
+            }
+            else if (border && page == 0)
+            {
                 TinyI2C.write(pattern | 0x01);
-            } else if (border && page == 7) {
+            }
+            else if (border && page == 7)
+            {
                 TinyI2C.write(pattern | 0x80);
-            } else {
+            }
+            else
+            {
                 TinyI2C.write(pattern);
             }
-            
         }
         TinyI2C.stop();
     }
 }
 
+void CH1115Display::drawPage(uint8_t p, uint8_t pattern)
+{
+    setAddress(0, p * 8);
+    TinyI2C.start(CH1115_I2C_ADDRESS, 0);
+    for (uint8_t i = 0; i < _width; i++)
+    {
+        TinyI2C.write((i < (_width - 1)) ? 0xC0 : 0x40);
+        TinyI2C.write(pattern);
+    }
+    TinyI2C.stop();
+}
+
+// 27. Read-Modify-Write: (E0H)
+//    A pair of Read-Modify-Write and End commands must always be used. Once read-modify-write is issued, column address is
+//    not incremental by read display data command but incremental by write display data command only. It continues until End
+//    command is issued. When the End is issued, column address returns to the address when read-modify-write is issued. This
+//    can reduce the microprocessor load when data of a specific display area is repeatedly changed during cursor blinking or
+//    others.
 void CH1115Display::startPageDrawing(uint8_t x, uint8_t y)
 {
     setAddress(x, y);
@@ -387,9 +413,12 @@ void CH1115Display::updatePageColumn(uint8_t pattern, uint8_t mode)
     r = TinyI2C.read();
 
     // update column
-    if (mode == 0) {
+    if (mode == 0)
+    {
         r = pattern;
-    } else {
+    }
+    else
+    {
         r = r | pattern;
     }
 
@@ -399,6 +428,8 @@ void CH1115Display::updatePageColumn(uint8_t pattern, uint8_t mode)
     TinyI2C.write(r);
 }
 
+// 28. End: (EEH)
+//   Cancels Read-Modify-Write mode and returns column address to the original address (when Read-Modify-Write is issued.)
 void CH1115Display::endPageDrawing()
 {
     TinyI2C.restart(CH1115_I2C_ADDRESS, 0);
@@ -471,6 +502,7 @@ void CH1115Display::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uin
     }
 
     uint8_t steep = abs(y1 - y0) > abs(x1 - x0);
+    
     if (steep)
     {
         CH1115_Swap(x0, y0);
@@ -490,22 +522,68 @@ void CH1115Display::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uin
     int8_t err = dx / 2;
     int8_t ystep = (y0 < y1) ? 1 : -1;
 
-    for (; x0 <= x1; x0++)
+    if (steep)
     {
-        if (steep)
-        {
-            drawPixel(y0, x0, color);
+        // in this mode x is line addressing and y column
+        uint8_t prevpage = x0/8;
+        if (ystep == -1) {
+            y0 -= 4;
         }
-        else
+        this->startPageDrawing(y0, x0);
+        uint8_t pattern = 0x00;
+        for (; x0 <= x1; x0++)
         {
-            drawPixel(x0, y0, color);
+            uint8_t curpage = x0/8;
+            if (curpage != prevpage) {
+                // flush
+                this->updatePageColumn(pattern, 1);
+                // change page
+                this->endPageDrawing();
+                prevpage = x0/8;
+                this->startPageDrawing(y0, x0);
+                pattern = 0x00;
+            }
+            
+            if (ystep == -1) {
+                pattern |= (1 << (7-(x0%8)));
+            } else {
+                pattern |= (1 << (x0%8));
+            }
+            
+            err -= dy;
+            if (err < 0)
+            {
+                this->updatePageColumn(pattern, 1);
+                y0 += ystep;
+                pattern = 0x00;
+                err += dx;
+            }
         }
-        err -= dy;
-        if (err < 0)
+        this->endPageDrawing();
+    }
+    else
+    {
+        uint8_t prevpage = y0/8;
+        this->startPageDrawing(x0, y0);
+        for (; x0 <= x1; x0++)
         {
-            y0 += ystep;
-            err += dx;
+            uint8_t curpage = y0/8;
+            if (curpage != prevpage) {
+                // change page
+                this->endPageDrawing();
+                prevpage = y0/8;
+                this->startPageDrawing(x0, y0);
+            }
+            this->updatePagePixel(y0, color);
+
+            err -= dy;
+            if (err < 0)
+            {
+                y0 += ystep;
+                err += dx;
+            }
         }
+        this->endPageDrawing();
     }
 }
 
@@ -533,17 +611,26 @@ void CH1115Display::drawString(uint8_t x, uint8_t y, const char *pText)
 
     while (*pText != '\0')
     {
+        if ((x + FONT_CHAR_WIDTH + 1) > this->_width)
+        {
+            break;
+        }
         // draw
         char c = pText[0];
 
-        for (int8_t i = 0; i < FONT_CHAR_WIDTH; i++)
+        uint8_t line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH));
+        this->start_data(line);
+        x++;
+        for (int8_t i = 1; i < FONT_CHAR_WIDTH; i++)
         {
-            uint8_t line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH) + i);
+            line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH) + i);
             send_data(line);
+            x++;
         }
 
         // draw empty vert line to separate char
-        send_data(0x00);
+        this->stop_data(0x00);
+        x++;
 
         pText++;
     }
@@ -551,23 +638,41 @@ void CH1115Display::drawString(uint8_t x, uint8_t y, const char *pText)
 
 void CH1115Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh, const uint8_t *data)
 {
-    for (uint8_t ty = 0; ty < sh; ty = ty + 8)
+    if (y+sh > this->_height) {
+        return;
+    }
+    
+    uint8_t page_offset = y % 8;
+
+    this->startPageDrawing(x, y);
+    for (uint8_t tx = 0; tx < sw; tx++)
     {
-        if (y + ty >= _height)
+        if (x + tx >= this->_width)
         {
             continue;
         }
-        setAddress(x, ty);
+        uint8_t pattern = pgm_read_byte(&data[tx]);
+        if (page_offset) {
+            pattern = (pattern << page_offset);
+        }
+        this->updatePageColumn(pattern, 1);
+    }
+    this->endPageDrawing();
 
+    if (page_offset) {
+        // draw second part
+        this->startPageDrawing(x, y+8);
         for (uint8_t tx = 0; tx < sw; tx++)
         {
-            if (x + tx >= _width)
+            if (x + tx >= this->_width)
             {
                 continue;
             }
-            uint16_t offset = (sw * (ty / 8)) + tx;
-            send_data(pgm_read_byte(&data[offset]));
+            uint8_t pattern = pgm_read_byte(&data[tx]);
+            pattern = (pattern >> (8-page_offset));
+            this->updatePageColumn(pattern, 1);
         }
+        this->endPageDrawing();
     }
 }
 
