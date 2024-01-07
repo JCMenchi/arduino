@@ -3,9 +3,16 @@
 
 #include <avr/pgmspace.h>
 
-#include <Wire.h>
+#define SOFTWIRE
 
-// #define HAS_SERIAL
+#ifdef SOFTWIRE
+#include <SoftWire.h>
+SoftWire Wire(SDA, SCL);
+#else
+#include <Wire.h>
+#endif
+
+#define HAS_SERIAL
 
 #define CH1115_Swap(a, b) \
     {                     \
@@ -32,6 +39,9 @@ CH1115Display::~CH1115Display()
 
 #define CH1115_STATUS 0x15
 
+char swTxBuffer[32];
+char swRxBuffer[32];
+
 // Possible Wire error code for endTransmission()
 //   0 .. success
 //   1 .. length to long for buffer
@@ -42,8 +52,17 @@ CH1115Display::~CH1115Display()
 void CH1115Display::init(uint8_t contrast)
 {
     // Init I2C com
+    #ifdef SOFTWIRE
+    Wire.setTxBuffer(swTxBuffer, sizeof(swTxBuffer));
+    Wire.setRxBuffer(swRxBuffer, sizeof(swRxBuffer));
+    //Wire.setDelay_us(2);
+    Wire.setClock(1600000L);
+    Wire.begin();
+    #else
     Wire.begin(CH1115_I2C_ADDRESS);
     Wire.setClock(400000L);
+    #endif
+    Wire.setTimeout(1000);
 
     // Check display type
     Wire.beginTransmission(CH1115_I2C_ADDRESS);
@@ -54,8 +73,6 @@ void CH1115Display::init(uint8_t contrast)
         Serial.print("I2C write error code: ");
         Serial.println(rc);
 #endif
-        _width = 0;
-        _height = 0;
         return;
     }
 
@@ -66,9 +83,6 @@ void CH1115Display::init(uint8_t contrast)
         Serial.print("I2C read error nbread: ");
         Serial.println(nb);
 #endif
-        _width = 0;
-        _height = 0;
-        return;
     }
 
     uint8_t u = Wire.read();
@@ -81,12 +95,9 @@ void CH1115Display::init(uint8_t contrast)
     else
     {
 #ifdef HAS_SERIAL
-        Serial.print("Screen status register: ");
+        Serial.print("Connection to CH1115 display error: ");
         Serial.println(u, 16);
 #endif
-        _width = 0;
-        _height = 0;
-        return;
     }
 
     // set normal display mode
@@ -426,16 +437,15 @@ void CH1115Display::drawString(uint8_t x, uint8_t y, const char *pText)
     {
         // draw
         char c = pText[0];
-        uint8_t line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH));
-        start_data(line);
-        for (int8_t i = 1; i < FONT_CHAR_WIDTH; i++)
+
+        for (int8_t i = 0; i < FONT_CHAR_WIDTH; i++)
         {
-            line = pgm_read_byte(small_font + (c * FONT_CHAR_WIDTH) + i);
-            add_data(line);
+            uint8_t line = pgm_read_byte(small_font + ((c-32) * FONT_CHAR_WIDTH) + i);
+            send_data(line);
         }
 
         // draw empty vert line to separate char
-        stop_data(0x00);
+        send_data(0x00);
 
         pText++;
     }
@@ -578,6 +588,60 @@ void CH1115Display::update()
             send_data(this->_buffer->screenBuffer[offset++]);
         }
     }
+}
+
+void CH1115Display::drawChar(uint8_t x, uint8_t y, unsigned char c, uint8_t color, uint8_t bg)
+{
+
+    if ((x >= _width) || ((x + FONT_CHAR_WIDTH) >= _width) ||
+        (y >= _height) || ((y + FONT_CHAR_HEIGHT - 1) >= _height))
+    {
+        return;
+    }
+
+    for (int8_t i = 0; i < (FONT_CHAR_WIDTH + 1); i++)
+    {
+        uint8_t line;
+        if (i == FONT_CHAR_WIDTH)
+        {
+            line = 0x0;
+        }
+        else
+        {
+            line = pgm_read_byte(small_font + ((c-32) * FONT_CHAR_WIDTH) + i);
+        }
+
+        for (int8_t j = 0; j < FONT_CHAR_HEIGHT; j++)
+        {
+            if (line & 0x1)
+            {
+                drawPixelBuf(x + i, y + j, color);
+            }
+            else if (bg != color)
+            {
+                drawPixelBuf(x + i, y + j, bg);
+            }
+            line >>= 1;
+        }
+    }
+}
+
+void CH1115Display::drawStringBuf(uint8_t x, uint8_t y, const char *pText)
+{
+    _buffer->clearBuffer();
+    _buffer->yoffset = y;
+
+    uint8_t cursor_x = x;
+    while (*pText != '\0')
+    {
+        drawChar(cursor_x, 0, *pText, CH1115_WHITE_COLOR, CH1115_BLACK_COLOR);
+        cursor_x = cursor_x + FONT_CHAR_WIDTH + 1;
+        if (cursor_x > _width)
+            break;
+        pText++;
+    }
+
+    update();
 }
 
 #endif

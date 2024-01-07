@@ -25,7 +25,7 @@ uint8_t ycursor = 28;
 void drawScene() {
   ch1115.drawScreen(0x00);
   ch1115.drawString(xcursor, ycursor, "Welcome");
-  return;
+  
   ch1115.drawLine(0,0,127,0, CH1115_WHITE_COLOR);
   ch1115.drawLine(127,0,127,63, CH1115_WHITE_COLOR);
   ch1115.drawLine(127,63,0,63, CH1115_WHITE_COLOR);

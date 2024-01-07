@@ -36,7 +36,7 @@
 #define CH1115_SCROLL_128FRAMES 0x03
 
 // uncomment to active double buffer
-//#define BACK_BUFFER
+#define BACK_BUFFER
 
 class CH1115Display
 {
@@ -68,6 +68,7 @@ public:
     
 #ifdef BACK_BUFFER
     void drawPixelBuf(uint8_t x, uint8_t y, uint8_t color);
+    void drawStringBuf(uint8_t x, uint8_t y, const char *pText);
 #endif
 
 private:
@@ -102,6 +103,9 @@ private:
     };
     void update();
     PageBuffer *_buffer;
+
+    void drawChar(uint8_t x, uint8_t y, unsigned char c, uint8_t color, uint8_t bg);
+
 #endif
 
     void setAddress(uint8_t x, uint8_t y);
