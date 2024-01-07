@@ -1,5 +1,12 @@
 #include <Arduino.h>
+
+//#define USE_WIRE
+
+#ifdef USE_WIRE
 #include <Wire.h>
+#else
+#include "TinyI2CMaster.h"
+#endif
 
 const uint8_t MAX_COLUMN = 21;
 uint8_t textpos = 0;
@@ -19,6 +26,11 @@ uint8_t I2C_device_addr = 0x3C;
 void setup()
 {
   reset_line();
+
+#ifndef USE_WIRE
+  TinyI2C.init();
+#endif
+
   Serial.begin(115200);
   Serial.println("Welcome");
   Serial.print("> ");
@@ -32,6 +44,7 @@ void setup()
 //   4 .. other twi error (lost bus arbitration, bus error, ..)
 //   5 .. timeout
 
+#ifdef USE_WIRE
 void command(const char *c)
 {
   if (strcmp(c, "connect") == 0)
@@ -151,6 +164,123 @@ void command(const char *c)
     }
   }
 }
+
+#else
+void command(const char *c)
+{
+  if (strcmp(c, "connect") == 0)
+  {
+    // Read one bit from device
+    bool con = TinyI2C.start(I2C_device_addr, 1);
+    if (!con)
+    {
+      Serial.println("I2C connect error");
+      return;
+    }
+
+    // Check display type
+    uint8_t u = TinyI2C.read();
+    TinyI2C.stop();
+
+    Serial.print("Screen status register: 0x");
+    Serial.print(u, 16);
+    uint8_t on = u & 0x40;
+    uint8_t id = u & 0x3F;
+    Serial.print(" Device ID: ");
+    Serial.print(id, 2);
+    if (on == 0)
+    {
+      Serial.println(" is ON");
+    }
+    else
+    {
+      Serial.println(" is OFF");
+    }
+
+    // set display normal
+    con = TinyI2C.start(I2C_device_addr, 0);
+    if (!con)
+    {
+      Serial.println("I2C connect error");
+      return;
+    }
+
+    bool wr = TinyI2C.write(0x00); // command start D/C bit is 0 (0000 0000)
+    wr = TinyI2C.write(0xA4);
+    TinyI2C.stop();
+
+    if (!wr)
+    {
+      Serial.println("I2C write error");
+    }
+  }
+  else if (strcmp(c, "on") == 0)
+  {
+    // Wire.beginTransmission(I2C_device_addr);
+    // Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    // uint8_t rc = Wire.write(0xAF);
+    // rc = Wire.endTransmission(true);
+
+    // if (rc != 0)
+    // {
+    //   Serial.print("I2C end: ");
+    //   Serial.println(rc);
+    // }
+  }
+  else if (strcmp(c, "off") == 0)
+  {
+    //Wire.beginTransmission(I2C_device_addr);
+    //Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    //uint8_t rc = Wire.write(0xAE);
+    //rc = Wire.endTransmission(true);
+//
+    //if (rc != 0)
+    //{
+    //  Serial.print("I2C end: ");
+    //  Serial.println(rc);
+    //}
+  }
+  else if (strcmp(c, "normal") == 0)
+  {
+    //Wire.beginTransmission(I2C_device_addr);
+    //Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    //uint8_t rc = Wire.write(0xA6);
+    //rc = Wire.endTransmission(true);
+//
+    //if (rc != 0)
+    //{
+    //  Serial.print("I2C end: ");
+    //  Serial.println(rc);
+    //}
+  }
+  else if (strcmp(c, "invert") == 0)
+  {
+    //Wire.beginTransmission(I2C_device_addr);
+    //Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    //uint8_t rc = Wire.write(0xA7);
+    //rc = Wire.endTransmission(true);
+
+    //if (rc != 0)
+    //{
+    //  Serial.print("I2C end: ");
+    //  Serial.println(rc);
+    //}
+  }
+  else if (strcmp(c, "clear") == 0)
+  {
+    //Wire.beginTransmission(I2C_device_addr);
+    //Wire.write(0x00); // command start D/C bit is 0 (0000 0000)
+    //uint8_t rc = Wire.write(0xA7);
+    //rc = Wire.endTransmission(true);
+
+    //if (rc != 0)
+    //{
+    //  Serial.print("I2C end: ");
+    //  Serial.println(rc);
+    //}
+  }
+}
+#endif
 
 void loop()
 {
