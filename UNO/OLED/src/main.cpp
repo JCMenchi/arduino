@@ -23,13 +23,22 @@ uint8_t xcursor = 40;
 uint8_t ycursor = 28;
 
 void drawScene() {
-  ch1115.drawScreen(0x00);
+  unsigned long start = millis();
+
+  ch1115.drawScreen(0x00, true);
   ch1115.drawString(xcursor, ycursor, "Welcome");
   
-  ch1115.drawLine(0,0,127,0, CH1115_WHITE_COLOR);
-  ch1115.drawLine(127,0,127,63, CH1115_WHITE_COLOR);
-  ch1115.drawLine(127,63,0,63, CH1115_WHITE_COLOR);
-  ch1115.drawLine(0,63,0,0,CH1115_WHITE_COLOR);
+  //ch1115.drawLine(0,0,127,0, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(127,0,127,63, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(127,63,0,63, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(0,63,0,0,CH1115_WHITE_COLOR);
+//
+  //ch1115.drawLine(0,0,127,63, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(0,63,127,0, CH1115_WHITE_COLOR);
+
+  unsigned long end = millis();
+  Serial.print(F("Frame refresh in (ms): "));
+  Serial.println(end-start);
 }
 
 void setup()
@@ -139,6 +148,7 @@ void loop()
         textpos = 2;
       }
       line_buffer[textpos] = ' ';
+      ch1115.drawString(0, curline*8, line_buffer);
     } else if (c > 31 && c < 127) { // only ASCII
       if (escape) {
         escape_buffer[escpos++] = c;

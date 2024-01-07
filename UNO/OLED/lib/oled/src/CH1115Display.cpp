@@ -3,15 +3,9 @@
 
 #include <avr/pgmspace.h>
 
-//#define USE_WIRE
-
-#ifdef USE_WIRE
-#include <Wire.h>
-#else
 #include "TinyI2CMaster.h"
-#endif
 
-//#define HAS_SERIAL
+// #define HAS_SERIAL
 
 #define CH1115_Swap(a, b) \
     {                     \
@@ -47,52 +41,9 @@ CH1115Display::~CH1115Display()
 //   5 .. timeout
 void CH1115Display::init(uint8_t contrast)
 {
-// Init I2C com
-#ifdef USE_WIRE
-    Wire.begin(CH1115_I2C_ADDRESS);
-    Wire.setClock(400000L);
-    Wire.setTimeout(1000);
-#else
+    // Init I2C com
     TinyI2C.init();
-#endif
 
-#ifdef USE_WIRE
-    // Check display type
-    Wire.beginTransmission(CH1115_I2C_ADDRESS);
-    uint8_t rc = Wire.endTransmission();
-    if (rc != 0)
-    {
-#ifdef HAS_SERIAL
-        Serial.print("I2C write error code: ");
-        Serial.println(rc);
-#endif
-        return;
-    }
-
-    uint8_t nb = Wire.requestFrom(CH1115_I2C_ADDRESS, 1);
-    if (nb != 1)
-    {
-#ifdef HAS_SERIAL
-        Serial.print("I2C read error nbread: ");
-        Serial.println(nb);
-#endif
-    }
-
-    uint8_t u = Wire.read();
-    if ((u & CH1115_DEVICE_ID) == 0x15)
-    {
-#ifdef HAS_SERIAL
-        Serial.print("Connection to CH1115 display OK.");
-#endif
-    }
-    else
-    {
-#ifdef HAS_SERIAL
-        Serial.print("Connection to CH1115 display error: ");
-        Serial.println(u, 16);
-#endif
-    }
-#else
     // Read one bit from device
     bool con = TinyI2C.start(CH1115_I2C_ADDRESS, 1);
     if (!con)
@@ -125,7 +76,6 @@ void CH1115Display::init(uint8_t contrast)
     {
         Serial.println(" is OFF");
     }
-#endif
 
     // set normal display mode
     send_command(0xA4);
@@ -345,17 +295,6 @@ void CH1115Display::invert(uint8_t on)
 #define CH1115_SET_PAGEADD 0xB0
 void CH1115Display::setAddress(uint8_t x, uint8_t y)
 {
-#ifdef USE_WIRE
-    Wire.beginTransmission(CH1115_I2C_ADDRESS);
-    // start read modify write
-    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
-    Wire.write(CH1115_SET_PAGEADD | (y / 8));
-    Wire.write(0x80); // command start D/C bit is 0, continuous (1000 0000)
-    Wire.write(CH1115_SET_COLADD_LSB | (x & 0x0F));
-    Wire.write(0x00); // command start D/C bit is 0, no continuous (0000 0000)
-    Wire.write(CH1115_SET_COLADD_MSB | ((x & 0xF0) >> 4));
-    Wire.endTransmission(); // switch to reception mode
-#else
     TinyI2C.start(CH1115_I2C_ADDRESS, 0);
     TinyI2C.write(0x80);
     TinyI2C.write(CH1115_SET_PAGEADD | (y / 8));
@@ -364,20 +303,109 @@ void CH1115Display::setAddress(uint8_t x, uint8_t y)
     TinyI2C.write(0x00);
     TinyI2C.write(CH1115_SET_COLADD_MSB | ((x & 0xF0) >> 4));
     TinyI2C.stop();
-#endif
 }
 
-void CH1115Display::drawScreen(uint8_t pattern)
+void CH1115Display::drawScreen(uint8_t pattern, bool border)
 {
     for (uint8_t page = 0; page < (_height / 8); page++)
     {
         setAddress(0, page * 8);
-
+        TinyI2C.start(CH1115_I2C_ADDRESS, 0);
         for (uint8_t i = 0; i < _width; i++)
         {
-            send_data(pattern);
+            TinyI2C.write((i<(_width-1))?0xC0:0x40);
+            if (border && i == 0) {
+                TinyI2C.write(0xFF);
+            } else if (border && i == (_width-1)) {
+                TinyI2C.write(0xFF);
+            } else if (border && page == 0) {
+                TinyI2C.write(pattern | 0x01);
+            } else if (border && page == 7) {
+                TinyI2C.write(pattern | 0x80);
+            } else {
+                TinyI2C.write(pattern);
+            }
+            
         }
+        TinyI2C.stop();
     }
+}
+
+void CH1115Display::startPageDrawing(uint8_t x, uint8_t y)
+{
+    setAddress(x, y);
+
+    TinyI2C.start(CH1115_I2C_ADDRESS, 0);
+    // start read modify write
+    TinyI2C.write(0x80);
+    TinyI2C.write(0xE0);
+}
+
+void CH1115Display::updatePagePixel(uint8_t y, uint8_t colour)
+{
+    if (y >= this->_height)
+    {
+        return;
+    }
+
+    // request data
+    TinyI2C.start(CH1115_I2C_ADDRESS, 0);
+    TinyI2C.write(0x40); // say we read Data RAM and not status register
+
+    TinyI2C.restart(CH1115_I2C_ADDRESS, 2);
+    uint8_t r = TinyI2C.read(); // dummy bit start read response
+    r = TinyI2C.read();
+
+    // updat pix
+    switch (colour)
+    {
+    case CH1115_WHITE_COLOR:
+        r |= (1 << (y % 8));
+        break;
+    case CH1115_BLACK_COLOR:
+        r &= ~(1 << (y % 8));
+        break;
+    case CH1115_INVERSE_COLOR:
+        r ^= (1 << (y % 8));
+        break;
+    }
+
+    // write new value
+    TinyI2C.restart(CH1115_I2C_ADDRESS, 0);
+    TinyI2C.write(0xC0);
+    TinyI2C.write(r);
+}
+
+void CH1115Display::updatePageColumn(uint8_t pattern, uint8_t mode)
+{
+    // request data
+    TinyI2C.start(CH1115_I2C_ADDRESS, 0);
+    TinyI2C.write(0x40); // say we read Data RAM and not status register
+
+    TinyI2C.restart(CH1115_I2C_ADDRESS, 2);
+    uint8_t r = TinyI2C.read(); // dummy bit start read response
+    r = TinyI2C.read();
+
+    // update column
+    if (mode == 0) {
+        r = pattern;
+    } else {
+        r = r | pattern;
+    }
+
+    // write new value
+    TinyI2C.restart(CH1115_I2C_ADDRESS, 0);
+    TinyI2C.write(0xC0);
+    TinyI2C.write(r);
+}
+
+void CH1115Display::endPageDrawing()
+{
+    TinyI2C.restart(CH1115_I2C_ADDRESS, 0);
+    // stop read modify write
+    TinyI2C.write(0x00);
+    TinyI2C.write(0xEE);
+    TinyI2C.stop();
 }
 
 void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour)
@@ -389,20 +417,7 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour)
 
     setAddress(x, y);
     int r = 0;
-#ifdef USE_WIRE
-    Wire.beginTransmission(CH1115_I2C_ADDRESS);
-    // start read modify write
-    Wire.write(0x80); // command D/C bit is 0, with continuation (1000 0000)
-    Wire.write(0xE0);
-    // request data
-    Wire.write(0x40);
-    Wire.endTransmission(); // switch to reception mode
 
-    // wait for answer
-    Wire.requestFrom(CH1115_I2C_ADDRESS, 2);
-    r = Wire.read(); // dummy bit start read response
-    r = Wire.read();
-#else
     TinyI2C.start(CH1115_I2C_ADDRESS, 0);
     // start read modify write
     TinyI2C.write(0x80);
@@ -413,7 +428,6 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour)
     TinyI2C.restart(CH1115_I2C_ADDRESS, 2);
     r = TinyI2C.read(); // dummy bit start read response
     r = TinyI2C.read();
-#endif
 
     switch (colour)
     {
@@ -428,16 +442,6 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour)
         break;
     }
 
-#ifdef USE_WIRE
-    // update bit
-    Wire.beginTransmission(CH1115_I2C_ADDRESS);
-    Wire.write(0xC0); // data followed by command D/C bit is 0, continuation is 1 (1100 0000)
-    Wire.write(r);
-    // stop read modify write
-    Wire.write(0x00); // command D/C bit is 0 (0000 0000)
-    Wire.write(0xEE);
-    Wire.endTransmission();
-#else
     TinyI2C.restart(CH1115_I2C_ADDRESS, 0);
     TinyI2C.write(0xC0);
     TinyI2C.write(r);
@@ -445,11 +449,27 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour)
     TinyI2C.write(0x00);
     TinyI2C.write(0xEE);
     TinyI2C.stop();
-#endif
 }
 
 void CH1115Display::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color)
 {
+    if (y0 == y1)
+    {
+        if (x0 > x1)
+        {
+            CH1115_Swap(x0, x1);
+        }
+        return drawHLine(x0, x1, y0, color);
+    }
+    if (x0 == x1)
+    {
+        if (y0 > y1)
+        {
+            CH1115_Swap(y0, y1);
+        }
+        return drawVLine(x0, y0, y1, color);
+    }
+
     uint8_t steep = abs(y1 - y0) > abs(x1 - x0);
     if (steep)
     {
@@ -486,6 +506,24 @@ void CH1115Display::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uin
             y0 += ystep;
             err += dx;
         }
+    }
+}
+
+void CH1115Display::drawHLine(uint8_t x0, uint8_t x1, uint8_t y, uint8_t color)
+{
+    this->startPageDrawing(x0, y);
+    for (uint8_t i = 0; i < (x1 - x0 + 1); i++)
+    {
+        this->updatePagePixel(y, color);
+    }
+    this->endPageDrawing();
+}
+
+void CH1115Display::drawVLine(uint8_t x, uint8_t y0, uint8_t y1, uint8_t color)
+{
+    for (uint8_t y = y0; y <= y1; y++)
+    {
+        this->drawPixel(x, y, color);
     }
 }
 
@@ -535,101 +573,39 @@ void CH1115Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh, con
 
 void CH1115Display::send_command(uint8_t command)
 {
-#ifdef USE_WIRE
-    Wire.beginTransmission(CH1115_I2C_ADDRESS);
-    Wire.write(0x00); // command start D/C bit is 0 and no continuation (0000 0000)
-    uint8_t rc = Wire.write(command);
-    rc = Wire.endTransmission(true);
-
-#ifdef HAS_SERIAL
-    if (rc != 0)
-    {
-        Serial.print("I2C end: ");
-        Serial.println(rc);
-    }
-#endif
-#else
     TinyI2C.start(CH1115_I2C_ADDRESS, 0);
     TinyI2C.write(0x00);
     TinyI2C.write(command);
     TinyI2C.stop();
-#endif
 }
 
 void CH1115Display::send_data(uint8_t byte)
 {
-#ifdef USE_WIRE
-    Wire.beginTransmission(CH1115_I2C_ADDRESS);
-    Wire.write(0x40); // data prefix byte D/C bit is 1 (0100 0000)
-    uint8_t rc = Wire.write(byte);
-    if (rc != 1)
-    {
-#ifdef HAS_SERIAL
-        Serial.println("I2C write nb data");
-#endif
-        return;
-    }
-    rc = Wire.endTransmission(true);
-
-#ifdef HAS_SERIAL
-    if (rc != 0)
-    {
-        Serial.print("I2C end: ");
-        Serial.println(rc);
-    }
-#endif
-#else
     TinyI2C.start(CH1115_I2C_ADDRESS, 0);
     TinyI2C.write(0x40);
     TinyI2C.write(byte);
     TinyI2C.stop();
-#endif
 }
 
 void CH1115Display::start_data(uint8_t byte)
 {
-#ifdef USE_WIRE
-    Wire.beginTransmission(CH1115_I2C_ADDRESS);
-    Wire.write(0xC0); // data prefix byte D/C bit is 1 (1100 0000)
-    Wire.write(byte);
-#else
     TinyI2C.start(CH1115_I2C_ADDRESS, 0);
     TinyI2C.write(0xC0);
     TinyI2C.write(byte);
-#endif
 }
 
 void CH1115Display::add_data(uint8_t byte)
 {
-#ifdef USE_WIRE
-    Wire.write(0xC0); // data prefix byte D/C bit is 1 (1100 0000)
-    Wire.write(byte);
-#else
     TinyI2C.write(0xC0);
     TinyI2C.write(byte);
-#endif
 }
 
 void CH1115Display::stop_data(uint8_t byte)
 {
-#ifdef USE_WIRE
-    Wire.write(0x40); // data prefix byte D/C bit is 1 (0100 0000)
-    Wire.write(byte);
-    uint8_t rc = Wire.endTransmission(true);
-
-#ifdef HAS_SERIAL
-    if (rc != 0)
-    {
-        Serial.print("I2C end: ");
-        Serial.println(rc);
-    }
-#endif
-#else
     TinyI2C.start(CH1115_I2C_ADDRESS, 0);
     TinyI2C.write(0x40);
     TinyI2C.write(byte);
     TinyI2C.stop();
-#endif
 }
 
 #ifdef BACK_BUFFER

@@ -58,8 +58,14 @@ public:
     void scrollArea(uint8_t startPage, uint8_t endPage, uint8_t startCol, uint8_t endCol, uint8_t dir, uint8_t nbFrame);
     void scroll(uint8_t mode);
     
+    // Full screen update
+    void drawScreen(uint8_t pattern, bool border = false);
+
     // Drawing
-    void drawScreen(uint8_t pattern);
+    void startPageDrawing(uint8_t x, uint8_t y);
+    void updatePagePixel(uint8_t y, uint8_t colour);
+    void updatePageColumn(uint8_t pattern, uint8_t mode);
+    void endPageDrawing();
 
     void drawString(uint8_t x, uint8_t y, const char *pText);
     void drawPixel(uint8_t x, uint8_t y, uint8_t color);
@@ -67,6 +73,7 @@ public:
     void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *data);
     
 #ifdef BACK_BUFFER
+    // Bufferred drawing
     void drawPixelBuf(uint8_t x, uint8_t y, uint8_t color);
     void drawStringBuf(uint8_t x, uint8_t y, const char *pText);
 #endif
@@ -110,6 +117,9 @@ private:
 
     void setAddress(uint8_t x, uint8_t y);
     
+    void drawHLine(uint8_t x0, uint8_t x1, uint8_t y0, uint8_t color);
+    void drawVLine(uint8_t x0, uint8_t y1, uint8_t y0, uint8_t color);
+
     void send_data(uint8_t data);
     void start_data(uint8_t byte);
     void add_data(uint8_t byte);
