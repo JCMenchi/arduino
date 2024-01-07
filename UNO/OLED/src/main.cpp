@@ -2,6 +2,8 @@
 
 #include <CH1115Display.h>
 
+#include "sprites.h"
+
 CH1115Display ch1115(128, 64);
 
 const uint8_t MAX_COLUMN = 21;
@@ -19,22 +21,53 @@ void reset_line() {
   textpos = 2;
 }
 
-uint8_t xcursor = 40;
-uint8_t ycursor = 28;
+uint8_t xcursor = 60;
+uint8_t ycursor = 0;
+uint8_t xprev = 1;
+uint8_t yprev = 1;
 
 void drawScene() {
   unsigned long start = millis();
 
-  ch1115.drawScreen(0x00, true);
-  ch1115.drawString(xcursor, ycursor, "Welcome");
+  //ch1115.drawScreen(0x00, false);
+  // ch1115.drawString(xcursor, ycursor, "Welcome");
   
-  //ch1115.drawLine(0,0,127,0, CH1115_WHITE_COLOR);
-  //ch1115.drawLine(127,0,127,63, CH1115_WHITE_COLOR);
-  //ch1115.drawLine(127,63,0,63, CH1115_WHITE_COLOR);
-  //ch1115.drawLine(0,63,0,0,CH1115_WHITE_COLOR);
-//
-  //ch1115.drawLine(0,0,127,63, CH1115_WHITE_COLOR);
-  //ch1115.drawLine(0,63,127,0, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(32,0,32,63, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(64,0,64,63, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(0,32,127,32, CH1115_WHITE_COLOR);
+
+  //ch1115.drawLine(64,0,127,63, CH1115_WHITE_COLOR);
+  //ch1115.drawLine(64,63,127,0, CH1115_WHITE_COLOR);
+
+  // ch1115.drawLine(0,0,16,32, CH1115_WHITE_COLOR);
+  // ch1115.drawLine(16,32,64,0, CH1115_WHITE_COLOR);
+  // ch1115.drawLine(0,63,16,32, CH1115_WHITE_COLOR);
+
+  if (ycursor != yprev) {
+    // range to clear
+    uint8_t p1 = yprev/8;
+    uint8_t ymax = yprev + 4*8;
+    uint8_t p2 = ymax/8;
+    for(uint8_t p = p1; p <= p2; p++) {
+      ch1115.drawPage(p, 0x00);
+    }
+    for(uint8_t p = 0; p < 4; p++) {
+      for(uint8_t i = 0; i < 9; i++) {
+        ch1115.drawSprite(12+i*12, p*8 + ycursor, SPRITE_WIDTH, SPRITE_HEIGHT, (p<2)?alien2:alien);
+      }
+    }
+    yprev = ycursor;
+  }
+  
+  ch1115.drawSprite(16, 48, SHELTER_WIDTH, SPRITE_HEIGHT, shelter);
+  ch1115.drawSprite(16+14+27, 48, SHELTER_WIDTH, SPRITE_HEIGHT, shelter);
+  ch1115.drawSprite(16+14+27+14+27, 48, SHELTER_WIDTH, SPRITE_HEIGHT, shelter);
+
+  if (xcursor != xprev) {
+    ch1115.drawPage(7, 0x00);
+    ch1115.drawSprite(xcursor, 56, SPRITE_WIDTH, SPRITE_HEIGHT, spaceship);
+    xprev = xcursor;
+  }
 
   unsigned long end = millis();
   Serial.print(F("Frame refresh in (ms): "));
@@ -49,6 +82,7 @@ void setup()
   // init OLED display
   ch1115.init(0x01);
   ch1115.flip(CH1115_ON);
+  ch1115.drawScreen(0x00);
 
   drawScene();
 }
@@ -59,16 +93,16 @@ void esccommand(const char* escape_buffer) {
       // arrow
       if (escape_buffer[1] == 'C') {
         // right
-        xcursor += 8;
+        xcursor += 1;
       } else if (escape_buffer[1] == 'D') {
         // left
-        xcursor = (xcursor?xcursor-8:0);
+        xcursor = (xcursor?xcursor-1:0);
       } else if (escape_buffer[1] == 'A') {
         // up
-        ycursor = (ycursor?ycursor-8:0);
+        ycursor = (ycursor?ycursor-1:0);
       } else if (escape_buffer[1] == 'B') {
         // down
-        ycursor += 8;
+        ycursor += 1;
       } else if (escape_buffer[1] == 'H') {
         // beg line
         xcursor = 0;
