@@ -36,7 +36,7 @@
 #define CH1115_SCROLL_128FRAMES 0x03
 
 // uncomment to active double buffer
-#define BACK_BUFFER
+//#define BACK_BUFFER
 
 class CH1115Display
 {
