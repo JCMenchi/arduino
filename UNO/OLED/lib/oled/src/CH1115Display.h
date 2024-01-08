@@ -61,17 +61,18 @@ public:
     // Full screen update
     void drawScreen(uint8_t pattern, bool border = false);
     void drawPage(uint8_t p, uint8_t pattern);
+    void drawPage(uint8_t p, uint8_t startcol, uint8_t nbcol, uint8_t pattern);
 
     // Drawing
     void startPageDrawing(uint8_t x, uint8_t y);
     void updatePagePixel(uint8_t y, uint8_t colour);
-    void updatePageColumn(uint8_t pattern, uint8_t mode);
+    void updatePageColumn(uint8_t pattern, uint8_t mode, uint8_t mask = 0xFF);
     void endPageDrawing();
 
     void drawString(uint8_t x, uint8_t y, const char *pText);
     void drawPixel(uint8_t x, uint8_t y, uint8_t color);
     void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);
-    void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *data);
+    void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *data, uint8_t mode);
     
 #ifdef BACK_BUFFER
     // Bufferred drawing
