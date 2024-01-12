@@ -1,7 +1,7 @@
 #ifndef _CH1115_DISPLAY_H
 #define _CH1115_DISPLAY_H
 
-#include "Arduino.h"
+#include <stdint.h>
 
 // Default I2C address is 0x3C or 0x3D if SA0 input is set high
 #define CH1115_I2C_ADDRESS 0x3C
@@ -35,101 +35,100 @@
 #define CH1115_SCROLL_64FRAMES 0x02
 #define CH1115_SCROLL_128FRAMES 0x03
 
+#define OVERWRITE_MODE 0
+#define OR_MODE 1
+#define XOR_MODE 2
+#define AND_MODE 3
+
 // uncomment to active double buffer
-//#define BACK_BUFFER
+// #define BACK_BUFFER
 
-class CH1115Display
-{
+class CH1115Display {
 public:
-    CH1115Display(uint8_t w, uint8_t h);
-    ~CH1115Display();
+  CH1115Display(uint8_t w, uint8_t h);
+  ~CH1115Display();
 
-    void init(uint8_t contrast = 0x80);
+  void init(uint8_t contrast = 0x80);
 
-    // Basic screen setup
-    void enable(uint8_t on);
-    void invert(uint8_t on);
-    void flip(uint8_t on);
-    void contrast(uint8_t contrast);
+  // Basic screen setup
+  void enable(uint8_t on);
+  void invert(uint8_t on);
+  void flip(uint8_t on);
+  void contrast(uint8_t contrast);
 
-    // Special Effects
-    void breathingEffect(uint8_t on);
+  // Special Effects
+  void breathingEffect(uint8_t on);
 
-    void scrollArea(uint8_t startPage, uint8_t endPage, uint8_t startCol, uint8_t endCol, uint8_t dir, uint8_t nbFrame);
-    void scroll(uint8_t mode);
-    
-    // Full screen update
-    void drawScreen(uint8_t pattern, bool border = false);
-    void drawPage(uint8_t p, uint8_t pattern);
-    void drawPage(uint8_t p, uint8_t startcol, uint8_t nbcol, uint8_t pattern);
+  void scrollArea(uint8_t startPage, uint8_t endPage, uint8_t startCol,
+                  uint8_t endCol, uint8_t dir, uint8_t nbFrame);
+  void scroll(uint8_t mode);
 
-    // Drawing
-    void startPageDrawing(uint8_t x, uint8_t y);
-    void updatePagePixel(uint8_t y, uint8_t colour);
-    void updatePageColumn(uint8_t pattern, uint8_t mode, uint8_t mask = 0xFF);
-    void endPageDrawing();
+  // Full screen update
+  void drawScreen(uint8_t pattern, bool border = false);
+  void drawPage(uint8_t p, uint8_t pattern);
+  void drawPage(uint8_t p, uint8_t startcol, uint8_t nbcol, uint8_t pattern);
 
-    void drawString(uint8_t x, uint8_t y, const char *pText);
-    void drawPixel(uint8_t x, uint8_t y, uint8_t color);
-    void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);
-    void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *data, uint8_t mode);
-    
+  // Drawing
+  void startPageDrawing(uint8_t x, uint8_t y);
+  uint8_t updatePagePixel(uint8_t y, uint8_t colour);
+  uint8_t updatePageColumn(uint8_t pattern, uint8_t mode, uint8_t mask = 0xFF);
+  void endPageDrawing();
+
+  void drawString(uint8_t x, uint8_t y, const char *pText);
+  void drawString2(uint8_t x, uint8_t y, const char *pText);
+  void drawPixel(uint8_t x, uint8_t y, uint8_t color);
+  void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);
+  void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
+                  const uint8_t *data, uint8_t mode);
+
 #ifdef BACK_BUFFER
-    // Bufferred drawing
-    void drawPixelBuf(uint8_t x, uint8_t y, uint8_t color);
-    void drawStringBuf(uint8_t x, uint8_t y, const char *pText);
+  // Bufferred drawing
+  void drawPixelBuf(uint8_t x, uint8_t y, uint8_t color);
+  void drawStringBuf(uint8_t x, uint8_t y, const char *pText);
 #endif
 
 private:
-
 #ifdef BACK_BUFFER
-    class PageBuffer
-    {
-    public:
-        PageBuffer(uint8_t w)
-        {
-            width = w;
-            screenBuffer = new uint8_t[width];
-            height = 8;
-            xoffset = 0;
-            yoffset = 0;
-        }
-        ~PageBuffer()
-        {
-            delete[] screenBuffer;
-        }
+  class PageBuffer {
+  public:
+    PageBuffer(uint8_t w) {
+      width = w;
+      screenBuffer = new uint8_t[width];
+      height = 8;
+      xoffset = 0;
+      yoffset = 0;
+    }
+    ~PageBuffer() { delete[] screenBuffer; }
 
-        void clearBuffer()
-        {
-            memset(this->screenBuffer, 0x00, this->width);
-        }
+    void clearBuffer() { memset(this->screenBuffer, 0x00, this->width); }
 
-        uint8_t *screenBuffer;
-        uint8_t width;
-        uint8_t height;
-        uint8_t xoffset;
-        uint8_t yoffset;
-    };
-    void update();
-    PageBuffer *_buffer;
+    uint8_t *screenBuffer;
+    uint8_t width;
+    uint8_t height;
+    uint8_t xoffset;
+    uint8_t yoffset;
+  };
+  void update();
+  PageBuffer *_buffer;
 
-    void drawChar(uint8_t x, uint8_t y, unsigned char c, uint8_t color, uint8_t bg);
+  void drawChar(uint8_t x, uint8_t y, unsigned char c, uint8_t color,
+                uint8_t bg);
 
 #endif
 
-    void setAddress(uint8_t x, uint8_t y);
-    
-    void drawHLine(uint8_t x0, uint8_t x1, uint8_t y0, uint8_t color);
-    void drawVLine(uint8_t x0, uint8_t y1, uint8_t y0, uint8_t color);
+  void setAddress(uint8_t x, uint8_t y);
 
-    void send_data(uint8_t data);
-    void start_data(uint8_t byte);
-    void add_data(uint8_t byte);
-    void stop_data(uint8_t byte);
-    void send_command(uint8_t command);
+  void drawHLine(uint8_t x0, uint8_t x1, uint8_t y0, uint8_t color);
+  void drawVLine(uint8_t x0, uint8_t y1, uint8_t y0, uint8_t color);
 
-    uint8_t _height;
-    uint8_t _width;
+  void send_data(uint8_t data);
+  void start_data(uint8_t byte);
+  void add_data(uint8_t byte);
+  void stop_data(uint8_t byte);
+  void send_command(uint8_t command);
+
+  uint8_t _height;
+  uint8_t _width;
 };
 
 #endif

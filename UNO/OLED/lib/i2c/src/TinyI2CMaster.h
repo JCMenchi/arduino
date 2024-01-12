@@ -1,16 +1,14 @@
 /* TinyI2C v2.0.1
 
    David Johnson-Davies - www.technoblogy.com - 5th June 2022
-   
+
    CC BY 4.0
-   Licensed under a Creative Commons Attribution 4.0 International license: 
+   Licensed under a Creative Commons Attribution 4.0 International license:
    http://creativecommons.org/licenses/by/4.0/
 */
 
 #ifndef TinyI2CMaster_h
 #define TinyI2CMaster_h
-
-#include <stdint.h>
 
 #include <stdint.h>
 
@@ -34,4 +32,3 @@ private:
 extern TinyI2CMaster TinyI2C;
 
 #endif
-
