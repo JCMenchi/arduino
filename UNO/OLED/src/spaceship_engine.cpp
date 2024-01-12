@@ -36,7 +36,7 @@ void move_spaceship(uint8_t direction) {
 
 void spaceship_action(uint8_t action) {
   if (action == GUNFIRE_ACTION && missile_state == 0) {
-    x_missile = x_position + 4;
+    x_missile = x_position + SPRITE_WIDTH/2;
     y_missile = 0;
     missile_state = 1;
 #ifdef HAS_SERIAL
@@ -67,9 +67,11 @@ void hit_something(uint8_t x, uint8_t y, CH1115Display *display) {
 #ifdef HAS_SERIAL
     Serial.println("Hit alien");
 #endif
-    kill_alien(x, y);
-    missile_state = 0;
-    y_missile = 0;
+    bool k = kill_alien(x, y);
+    if (k) {
+      missile_state = 0;
+      y_missile = 0;
+    }
   }
 }
 

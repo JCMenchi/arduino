@@ -37,7 +37,7 @@ void drawScene(CH1115Display *display, bool first) {
   update_spaceship(&ch1115);
 
   unsigned long end = millis();
-  if ((end - start) > 100) {
+  if ((end - start) > 152) {
     Serial.print("Frame refresh in (ms): ");
     Serial.println(end - start);
   }

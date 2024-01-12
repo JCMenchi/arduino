@@ -32,7 +32,7 @@ extern uint8_t alien_frame;
 
 void update_alien(CH1115Display *display);
 void move_alien(uint8_t direction);
-void kill_alien(uint8_t x, uint8_t y);
+bool kill_alien(uint8_t x, uint8_t y);
 uint8_t check_alien_status();
 
 
