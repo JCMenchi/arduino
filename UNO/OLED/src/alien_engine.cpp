@@ -97,7 +97,7 @@ void update_alien_range() {
     }
   }
 
-//#ifdef HAS_SERIAL
+#ifdef HAS_SERIAL
   Serial.print("alien range: col ");
   Serial.print(min_col);
   Serial.print("-");
@@ -106,7 +106,7 @@ void update_alien_range() {
   Serial.print(min_row);
   Serial.print("-");
   Serial.println(max_row);
-//#endif
+#endif
 }
 
 void do_update_alien(CH1115Display *display) {

@@ -1,6 +1,7 @@
 
 
 #include "common.h"
+#include "sound.h"
 
 #ifdef USE_MINICORE
 #include <arduimini.h>
@@ -20,6 +21,7 @@ void drawScene(CH1115Display *display, bool first) {
   unsigned long start = millis();
 
   if (first) {
+    start_sound();
     fps_start_time = 0;
     fps_nb_frame = 0;
     // reset screen effect
@@ -94,11 +96,28 @@ bool esccommand(const char *escape_buffer) {
 }
 
 char escape_buffer[10];
+uint8_t current_note = 0;
+unsigned long start_note = 0;
 
 void gameloop() {
   bool escape = false;
   memset(escape_buffer, 0, 10);
   uint8_t escpos = 0;
+
+  // music
+  if (!gameOver) {
+    unsigned long now = millis();
+    if (start_note == 0) {
+      start_note = now;
+      tone(MUSIC_PIN, sound_loop[current_note], SOUND_LOOP_NOTE_DURATION);
+    } else if (now > (start_note + SOUND_LOOP_NOTE_DURATION + SOUND_LOOP_NOTE_PAUSE)) {
+      noTone(MUSIC_PIN);
+      start_note = 0;
+      current_note = (current_note+1)%4;
+    }
+  } else {
+    noTone(MUSIC_PIN);
+  }
 
   delay(1);
   while (Serial.available()) {
@@ -166,6 +185,24 @@ void setup() {
 
   // draw welcome screen
   drawStart(&ch1115);
+
+  // Play 1-up sound
+  //Serial.println("Play");
+  //tone(8,NOTE_E6,125);
+  //delay(130);
+  //tone(8,NOTE_G6,125);
+  //delay(130);
+  //tone(8,NOTE_E7,125);
+  //delay(130);
+  //tone(8,NOTE_C7,125);
+  //delay(130);
+  //tone(8,NOTE_D7,125);
+  //delay(130);
+  //tone(8,NOTE_G7,125);
+  //delay(125);
+  //noTone(8);
+//
+  //delay(2000);  // pause 2 seconds
 }
 
 void loop() { gameloop(); }

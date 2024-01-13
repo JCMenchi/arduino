@@ -3,6 +3,7 @@
 #include <CH1115Display.h>
 
 #include "sprites.h"
+#include "sound.h"
 
 #ifdef USE_MINICORE
 #include <arduimini.h>
@@ -20,6 +21,9 @@ uint8_t y_missile = 0;
 uint8_t x_position = 64;
 uint8_t x_prev_position = 64;
 
+const int16_t fire_sound[] = { NOTE_G4, NOTE_G5, NOTE_G6, 0};
+uint8_t fire_sound_pos = 0;
+
 void move_spaceship(uint8_t direction) {
   x_prev_position = x_position;
 
@@ -36,6 +40,7 @@ void move_spaceship(uint8_t direction) {
 
 void spaceship_action(uint8_t action) {
   if (action == GUNFIRE_ACTION && missile_state == 0) {
+    tone(MUSIC_PIN, NOTE_G4, 35);
     x_missile = x_position + SPRITE_WIDTH / 2;
     y_missile = 0;
     missile_state = 1;
@@ -57,6 +62,8 @@ void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display
 #ifdef HAS_SERIAL
     Serial.println("Hit shelter");
 #endif
+    noTone(MUSIC_PIN);
+    tone(MUSIC_PIN, NOTE_D1, 35);
     missile_state = 0;
     y_missile = 0;
     display->startPageDrawing(x_missile - 1, 48);
@@ -71,6 +78,8 @@ void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display
 #endif
     bool k = kill_alien(x, ymin) || kill_alien(x, ymax);
     if (k) {
+      noTone(MUSIC_PIN);
+      tone(MUSIC_PIN, NOTE_C7, 35);
       clear_missile(x_missile, y_missile, display);
       missile_state = 0;
       y_missile = 0;
