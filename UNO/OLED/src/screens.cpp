@@ -10,8 +10,8 @@
 
 void drawGameOver(CH1115Display *display) {
   display->drawScreen(0x00, true);
-  display->drawString(32, 32, "GAME OVER");
-  display->drawString(3, 54, "spacebar to restart.");
+  display->drawString(40, 24, "GAME OVER");
+  display->drawString(3, 54, "insert coins...");
   display->scrollArea(6, 7, 2, 120, CH1115_SCROLL_RIGHT, CH1115_SCROLL_6FRAMES);
   display->scroll(CH1115_SCROLL_CONTINUOUS);
 }
@@ -20,7 +20,7 @@ void drawStart(CH1115Display *display) {
   display->breathingEffect(CH1115_OFF);
   display->drawScreen(0x00, true);
   display->drawString(40, 24, "INVADERS");
-  display->drawString(3, 54, "insert coins");
+  display->drawString(3, 54, "insert coins...");
   display->scrollArea(6, 7, 2, 120, CH1115_SCROLL_RIGHT, CH1115_SCROLL_6FRAMES);
   display->scroll(CH1115_SCROLL_CONTINUOUS);
 }

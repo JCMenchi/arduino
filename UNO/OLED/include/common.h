@@ -27,8 +27,6 @@ void draw_shelter(CH1115Display *display);
 uint8_t check_spaceship_status();
 void clear_missile(uint8_t x, uint8_t y, CH1115Display *display);
 
-#define ALIEN_FRAME_COUNTER 3
-extern uint8_t alien_frame;
 
 void update_alien(CH1115Display *display);
 void move_alien(uint8_t direction);

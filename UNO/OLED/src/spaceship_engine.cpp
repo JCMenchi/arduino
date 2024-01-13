@@ -97,7 +97,7 @@ uint8_t draw_missile(uint8_t x, uint8_t y, CH1115Display *display) {
 #endif
     display->startPageDrawing(x_missile, y_missile);
     uint8_t prev =
-        display->updatePageColumn(missile_pattern, XOR_MODE, missile_pattern);
+        display->updatePageColumn(missile_pattern, OVERWRITE_MODE, missile_pattern);
     display->endPageDrawing();
 
     return prev;
@@ -114,7 +114,7 @@ void clear_missile(uint8_t x, uint8_t y, CH1115Display *display) {
   }
 
   display->startPageDrawing(x, y);
-  uint8_t prev = display->updatePageColumn(missile_pattern, XOR_MODE, missile_pattern);
+  uint8_t prev = display->updatePageColumn(0x00, OVERWRITE_MODE, missile_pattern);
   display->endPageDrawing();
 }
 

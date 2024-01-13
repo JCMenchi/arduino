@@ -9,7 +9,7 @@
 #include <Arduino.h>
 #endif
 
-#define HAS_SERIAL
+//#define HAS_SERIAL
 
 const uint8_t NB_ALIENS = 8;
 const uint8_t NB_ALIEN_ROW = 4;
@@ -30,18 +30,20 @@ uint8_t alien_x_pos = 0;
 uint8_t alien_y_pos = 0;
 uint8_t alien_dx = 1;
 
+const uint8_t ALIEN_FRAME_COUNTER = 3;
 uint8_t alien_frame = 0;
 
 uint8_t dont_go_down = 5;
 
 void update_alien_range() {
-  min_col = NB_ALIENS;
-  max_col = 0;
+  min_col = 0;
+  max_col = NB_ALIENS;
   min_row = 0;
   max_row = NB_ALIEN_ROW;
 
   uint8_t nb = 0;
 
+  // MAX ROW
   for (uint8_t r = NB_ALIEN_ROW - 1; r >= 0; --r) {
     nb = 0;
     for (uint8_t c = 0; c < NB_ALIENS; ++c) {
@@ -49,11 +51,13 @@ void update_alien_range() {
         nb++;
     }
     if (nb == 0) {
-      max_row = r + 1;
+      max_row--;
     } else {
       break;
     }
   }
+
+  // MIN ROW
   for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
     nb = 0;
     for (uint8_t c = 0; c < NB_ALIENS; ++c) {
@@ -61,39 +65,39 @@ void update_alien_range() {
         nb++;
     }
     if (nb == 0) {
-      min_row = r + 1;
+      min_row++;
     } else {
       break;
     }
   }
 
-  for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
-    uint8_t local_min = 0;
-    uint8_t local_max = NB_ALIENS;
-    for (uint8_t c = 0; c < NB_ALIENS; ++c) {
-      if (aliens[c + r * NB_ALIENS] == 0) {
-        local_min = c + 1;
-      } else {
-        break;
-      }
+  for (uint8_t c = NB_ALIENS - 1; c >= 0; --c) {
+    nb = 0;
+    for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
+      if (aliens[c + r * NB_ALIENS])
+        nb++;
     }
-    for (uint8_t c = NB_ALIENS - 1; c >= 0; --c) {
-      if (aliens[c + r * NB_ALIENS] == 0) {
-        local_max = c;
-      } else {
-        break;
-      }
-    }
-
-    if (local_min < min_col) {
-      min_col = local_min;
-    }
-    if (local_max > max_col) {
-      max_col = local_max;
+    if (nb == 0) {
+      max_col--;
+    } else {
+      break;
     }
   }
 
-#ifdef HAS_SERIAL
+  for (uint8_t c = 0; c < NB_ALIENS; ++c) {
+    nb = 0;
+    for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
+      if (aliens[c + r * NB_ALIENS])
+        nb++;
+    }
+    if (nb == 0) {
+      min_col++;
+    } else {
+      break;
+    }
+  }
+
+//#ifdef HAS_SERIAL
   Serial.print("alien range: col ");
   Serial.print(min_col);
   Serial.print("-");
@@ -102,33 +106,33 @@ void update_alien_range() {
   Serial.print(min_row);
   Serial.print("-");
   Serial.println(max_row);
-#endif
+//#endif
 }
 
-void update_alien(CH1115Display *display) {
+void do_update_alien(CH1115Display *display) {
   // draw aliens
-  for (uint8_t p = min_row; p < max_row; p++) {
+  for (uint8_t r = 0; r < max_row; r++) {
     for (uint8_t i = min_col; i < max_col; i++) {
-      const uint8_t *sprite = NULL;
-      if (aliens[i + p * NB_ALIENS] == 1) {
+      const uint8_t *sprite = empty;
+      if (aliens[i + r * NB_ALIENS] == 1) {
         sprite = alien;
-      } else if (aliens[i + p * NB_ALIENS] == 2) {
+      } else if (aliens[i + r * NB_ALIENS] == 2) {
         sprite = alien2;
-      } else if (aliens[i + p * NB_ALIENS] == 3) {
+      } else if (aliens[i + r * NB_ALIENS] == 3) {
         sprite = explosion_frames;
-      } else if (aliens[i + p * NB_ALIENS] == 4) {
+      } else if (aliens[i + r * NB_ALIENS] == 4) {
         sprite = explosion_frames + SPRITE_WIDTH;
-      } else if (aliens[i + p * NB_ALIENS] == 5) {
+      } else if (aliens[i + r * NB_ALIENS] == 5) {
         sprite = explosion_frames + 2 * SPRITE_WIDTH;
-      } else if (aliens[i + p * NB_ALIENS] == 6) {
+      } else if (aliens[i + r * NB_ALIENS] == 6) {
         sprite = explosion_frames + 3 * SPRITE_WIDTH;
-      } else if (aliens[i + p * NB_ALIENS] == 7) {
+      } else if (aliens[i + r * NB_ALIENS] == 7) {
         sprite = empty;
       }
 
       if (sprite) {
         display->drawSprite(alien_x_pos + (i - min_col) * ALIEN_X_SPACING,
-                            p * ALIEN_Y_SPACING + alien_y_pos, SPRITE_WIDTH,
+                            alien_y_pos + r * ALIEN_Y_SPACING, SPRITE_WIDTH,
                             SPRITE_HEIGHT, sprite, OVERWRITE_MODE);
       }
     }
@@ -164,6 +168,14 @@ void update_alien(CH1115Display *display) {
   }
 }
 
+void update_alien(CH1115Display *display) {
+  if (alien_frame == 0) {
+    do_update_alien(display);
+    alien_frame = ALIEN_FRAME_COUNTER;
+  }
+  alien_frame--;
+}
+
 void move_alien(uint8_t direction) {
   if (direction == MOVE_INIT) {
     min_col = 0;
@@ -173,6 +185,7 @@ void move_alien(uint8_t direction) {
     alien_x_pos = 0;
     alien_y_pos = 0;
     alien_dx = 1;
+    alien_frame = 0;
 
     for (uint8_t row = 0; row < NB_ALIEN_ROW; ++row) {
       for (uint8_t col = 0; col < NB_ALIENS; ++col) {

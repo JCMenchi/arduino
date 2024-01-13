@@ -13,30 +13,42 @@
 CH1115Display ch1115(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 uint8_t gameOver = 1;
+unsigned long fps_start_time = 0;
+uint32_t fps_nb_frame = 0;
 
 void drawScene(CH1115Display *display, bool first) {
   unsigned long start = millis();
 
   if (first) {
+    fps_start_time = 0;
+    fps_nb_frame = 0;
     // reset screen effect
     display->scroll(CH1115_SCROLL_OFF);
     // init screen
     move_alien(MOVE_INIT);
     move_spaceship(MOVE_INIT);
+
     display->drawScreen(0x00);
     draw_shelter(&ch1115);
   }
 
-  if (first || alien_frame == 0) {
-    update_alien(&ch1115);
-    alien_frame = ALIEN_FRAME_COUNTER;
-  }
-  alien_frame--;
-
-  // draw spaceship
+  // update spaceship
   update_spaceship(&ch1115);
-
+  // update alien
+  update_alien(&ch1115);
+    
+  // compute FPS end, check drawing time
   unsigned long end = millis();
+
+  fps_nb_frame++;
+  if (fps_start_time == 0) {
+    fps_start_time = start;
+  } else if ((end -fps_start_time) > 10000) {
+    Serial.print("FPS: ");
+    Serial.println((fps_nb_frame * 1000) / (end-fps_start_time));
+    fps_start_time = 0;
+    fps_nb_frame = 0;
+  }
   if ((end - start) > 160) {
     Serial.print("Frame refresh in (ms): ");
     Serial.println(end - start);
@@ -132,6 +144,10 @@ void gameloop() {
     } else if (check_alien_status() == ALIEN_LOST) {
       gameOver = 1;
       drawVictory(&ch1115);
+      // flush read buffer
+      while (Serial.available()) {
+        Serial.read();
+      }
       drawStart(&ch1115);
     }
   }
