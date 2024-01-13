@@ -37,38 +37,48 @@ void drawScene(CH1115Display *display, bool first) {
   update_spaceship(&ch1115);
 
   unsigned long end = millis();
-  if ((end - start) > 152) {
+  if ((end - start) > 160) {
     Serial.print("Frame refresh in (ms): ");
     Serial.println(end - start);
   }
 }
 
-void esccommand(const char *escape_buffer) {
+bool esccommand(const char *escape_buffer) {
 
   if (escape_buffer[0] == '[') {
     // arrow
     if (escape_buffer[1] == 'C') {
       // right
-      move_spaceship(MOVE_RIGHT);
+      move_spaceship(MOVE_RIGHT); 
+      return true;
     } else if (escape_buffer[1] == 'D') {
       // left
       move_spaceship(MOVE_LEFT);
+      return true;
     } else if (escape_buffer[1] == 'A') {
       // up
       move_alien(MOVE_UP);
+      return true;
     } else if (escape_buffer[1] == 'B') {
       // down
       move_alien(MOVE_DOWN);
+      return true;
     } else if (escape_buffer[1] == 'H') {
       // beg line
+      return true;
     } else if (escape_buffer[1] == 'F') {
       // end line
+      return true;
     } else if (escape_buffer[1] == '5' && escape_buffer[2] == '~') {
       // page up
+      return true;
     } else if (escape_buffer[1] == '6' && escape_buffer[2] == '~') {
       // page down
+      return true;
     }
   }
+
+  return false;
 }
 
 char escape_buffer[10];
@@ -78,6 +88,7 @@ void gameloop() {
   memset(escape_buffer, 0, 10);
   uint8_t escpos = 0;
 
+  delay(1);
   while (Serial.available()) {
     char c = Serial.read();
     if (c == 27) { // escape
@@ -86,6 +97,12 @@ void gameloop() {
     } else if (c > 31 && c < 127) { // only ASCII
       if (escape) {
         escape_buffer[escpos++] = c;
+        if (esccommand(escape_buffer)) {
+          escape = false;
+          memset(escape_buffer, 0, 10);
+          escpos = 0;
+          break;
+        }
       } else if (c == ' ') {
         if (gameOver) {
           gameOver = 0;
@@ -93,14 +110,16 @@ void gameloop() {
         } else {
           spaceship_action(GUNFIRE_ACTION);
         }
+        break;
+      } else if (c == 'l') {
+        move_spaceship(MOVE_RIGHT);
+        break;
+      } else if (c == 'h') {
+        move_spaceship(MOVE_LEFT);
+        break;
       }
-    }
-  }
 
-  if (escape) {
-    // Serial.print("Current ESC buffer: ");
-    // Serial.println(escape_buffer);
-    esccommand(escape_buffer);
+    }
   }
 
   if (!gameOver) {

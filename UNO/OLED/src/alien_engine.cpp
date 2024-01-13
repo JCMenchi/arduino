@@ -21,6 +21,10 @@ const uint8_t ALIEN_X_SPACING = 15;
 const uint8_t ALIEN_Y_SPACING = 8;
 
 uint8_t aliens[NB_ALIENS * NB_ALIEN_ROW];
+uint8_t min_col = 0;
+uint8_t max_col = NB_ALIENS;
+uint8_t min_row = 0;
+uint8_t max_row = NB_ALIEN_ROW;
 
 uint8_t alien_x_pos = 0;
 uint8_t alien_y_pos = 0;
@@ -30,11 +34,82 @@ uint8_t alien_frame = 0;
 
 uint8_t dont_go_down = 5;
 
+void update_alien_range() {
+  min_col = NB_ALIENS;
+  max_col = 0;
+  min_row = 0;
+  max_row = NB_ALIEN_ROW;
+
+  uint8_t nb = 0;
+
+  for (uint8_t r = NB_ALIEN_ROW - 1; r >= 0; --r) {
+    nb = 0;
+    for (uint8_t c = 0; c < NB_ALIENS; ++c) {
+      if (aliens[c + r * NB_ALIENS])
+        nb++;
+    }
+    if (nb == 0) {
+      max_row = r + 1;
+    } else {
+      break;
+    }
+  }
+  for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
+    nb = 0;
+    for (uint8_t c = 0; c < NB_ALIENS; ++c) {
+      if (aliens[c + r * NB_ALIENS])
+        nb++;
+    }
+    if (nb == 0) {
+      min_row = r + 1;
+    } else {
+      break;
+    }
+  }
+
+  for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
+    uint8_t local_min = 0;
+    uint8_t local_max = NB_ALIENS;
+    for (uint8_t c = 0; c < NB_ALIENS; ++c) {
+      if (aliens[c + r * NB_ALIENS] == 0) {
+        local_min = c + 1;
+      } else {
+        break;
+      }
+    }
+    for (uint8_t c = NB_ALIENS - 1; c >= 0; --c) {
+      if (aliens[c + r * NB_ALIENS] == 0) {
+        local_max = c;
+      } else {
+        break;
+      }
+    }
+
+    if (local_min < min_col) {
+      min_col = local_min;
+    }
+    if (local_max > max_col) {
+      max_col = local_max;
+    }
+  }
+
+#ifdef HAS_SERIAL
+  Serial.print("alien range: col ");
+  Serial.print(min_col);
+  Serial.print("-");
+  Serial.print(max_col);
+  Serial.print(" row ");
+  Serial.print(min_row);
+  Serial.print("-");
+  Serial.println(max_row);
+#endif
+}
+
 void update_alien(CH1115Display *display) {
   // draw aliens
-  for (uint8_t p = 0; p < NB_ALIEN_ROW; p++) {
-    for (uint8_t i = 0; i < NB_ALIENS; i++) {
-      const uint8_t *sprite = empty;
+  for (uint8_t p = min_row; p < max_row; p++) {
+    for (uint8_t i = min_col; i < max_col; i++) {
+      const uint8_t *sprite = NULL;
       if (aliens[i + p * NB_ALIENS] == 1) {
         sprite = alien;
       } else if (aliens[i + p * NB_ALIENS] == 2) {
@@ -47,16 +122,20 @@ void update_alien(CH1115Display *display) {
         sprite = explosion_frames + 2 * SPRITE_WIDTH;
       } else if (aliens[i + p * NB_ALIENS] == 6) {
         sprite = explosion_frames + 3 * SPRITE_WIDTH;
+      } else if (aliens[i + p * NB_ALIENS] == 7) {
+        sprite = empty;
       }
 
-      display->drawSprite(alien_x_pos + i * ALIEN_X_SPACING,
-                          p * ALIEN_Y_SPACING + alien_y_pos, SPRITE_WIDTH,
-                          SPRITE_HEIGHT, sprite, OVERWRITE_MODE);
+      if (sprite) {
+        display->drawSprite(alien_x_pos + (i - min_col) * ALIEN_X_SPACING,
+                            p * ALIEN_Y_SPACING + alien_y_pos, SPRITE_WIDTH,
+                            SPRITE_HEIGHT, sprite, OVERWRITE_MODE);
+      }
     }
   }
 
   // move alien
-  if (alien_x_pos >= ALIEN_X_MAX_POS) {
+  if (alien_x_pos >= (128 - ((max_col - min_col) * (ALIEN_X_SPACING)))) {
     alien_dx = -1;
     dont_go_down--;
     if (dont_go_down == 0) {
@@ -69,18 +148,28 @@ void update_alien(CH1115Display *display) {
   alien_x_pos += alien_dx;
 
   // check explosion
+  uint8_t prev_min_col = min_col;
   for (uint8_t i = 0; i < NB_ALIENS * NB_ALIEN_ROW; ++i) {
     if (aliens[i] >= 3) {
       aliens[i] += 1;
     }
-    if (aliens[i] == 6) {
+    if (aliens[i] == 8) {
       aliens[i] = 0;
+      // end explosion update range
+      update_alien_range();
     }
+  }
+  if (prev_min_col != min_col) {
+    alien_x_pos += (min_col - prev_min_col) * ALIEN_X_SPACING;
   }
 }
 
 void move_alien(uint8_t direction) {
   if (direction == MOVE_INIT) {
+    min_col = 0;
+    max_col = NB_ALIENS;
+    min_row = 0;
+    max_row = NB_ALIEN_ROW;
     alien_x_pos = 0;
     alien_y_pos = 0;
     alien_dx = 1;
@@ -102,12 +191,13 @@ void move_alien(uint8_t direction) {
 }
 
 bool kill_alien(uint8_t x, uint8_t y) {
-  uint8_t col = (x - alien_x_pos) / ALIEN_X_SPACING;
+  uint8_t col = (x - alien_x_pos) / ALIEN_X_SPACING + min_col;
   uint8_t row = (y - alien_y_pos) / ALIEN_Y_SPACING;
 
   if (col < NB_ALIENS && row < NB_ALIEN_ROW) {
     // check if it is an explosion and skip it
-    if (aliens[col + row * NB_ALIENS] >= 3) {
+    if (aliens[col + row * NB_ALIENS] >= 3 ||
+        aliens[col + row * NB_ALIENS] == 0) {
 #ifdef HAS_SERIAL
       Serial.print("Hit alien explosion: ");
       Serial.print(col);
