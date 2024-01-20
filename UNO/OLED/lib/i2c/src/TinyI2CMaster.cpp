@@ -9,11 +9,7 @@
 
 #include "TinyI2CMaster.h"
 
-#ifdef USE_MINICORE
-#include <arduimini.h>
-#else
-#include <Arduino.h>
-#endif
+#include <avr/io.h>
 
 TinyI2CMaster::TinyI2CMaster() {}
 
@@ -196,10 +192,10 @@ that provide a TWI peripheral: ATtiny48/88.
 */
 
 // 400kHz clock
-uint32_t const F_TWI = 400000L; // Hardware I2C clock in Hz
+uint32_t const F_TWI_NORMAL = 400000L; // Hardware I2C clock in Hz
 
 // Choose for 1MHz clock
-// uint32_t const F_TWI = 1000000L;                                // Hardware
+uint32_t const F_TWI_FAST = 1000000L;                                // Hardware
 // I2C clock in Hz
 
 uint8_t const TWSR_MTX_DATA_ACK = 0x28;
@@ -210,11 +206,33 @@ uint8_t const TWSR_REP_START = 0x10;
 uint8_t const I2C_READ = 1;
 uint8_t const I2C_WRITE = 0;
 
-void TinyI2CMaster::init() {
-  digitalWrite(SDA, HIGH); // Pullups on
-  digitalWrite(SCL, HIGH);
+void TinyI2CMaster::init(bool fast) {
+  // activate pull up
+
+#if defined (__AVR_ATmega328P__)
+  // ATMega328P (UNO) => SCL = PC5 SDA = PC4
+  DDRC &= ~((1 << DDC4)|(1 << DDC5));
+  PORTC |= (1 << PORTC4) | (1 << PORTC5);
+#elif defined (__AVR_ATmega8515__)
+  #error "No TWI for 8515"
+#elif defined (__AVR_ATmega8535__)
+  // ATMega8535 => SCL = PC0 SDA = PC1
+  DDRC &= ~((1 << DDC0)|(1 << DDC1));
+  PORTC |= (1 << PORTC0) | (1 << PORTC1);
+#else
+  #error "No yet configured, check datasheet"
+#endif
+  
+  
+  //digitalWrite(SDA, HIGH); // Pullups on
+  //digitalWrite(SCL, HIGH);
+
   TWSR = 0;                        // No prescaler
-  TWBR = (F_CPU / F_TWI - 16) / 2; // Set bit rate factor
+  if (fast) {
+    TWBR = (F_CPU / F_TWI_FAST - 16) / 2; // Set bit rate factor
+  } else {
+    TWBR = (F_CPU / F_TWI_NORMAL - 16) / 2; // Set bit rate factor
+  }
 }
 
 uint8_t TinyI2CMaster::read(void) {

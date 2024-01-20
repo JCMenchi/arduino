@@ -377,15 +377,101 @@ void play_note7(char n) {
   noTone(MUSIC_PIN);
 }
 
+uint8_t level = 1;
+
+int select_note(char n) {
+
+  int offset = (level - 1) * 24;
+
+  if (n == 'a') {
+    return pgm_read_word(notes + offset);
+  } else if (n == 'z') {
+    return pgm_read_word(notes + offset + 1);
+  } else if (n == 'e') {
+    return pgm_read_word(notes + offset + 2);
+  } else if (n == 'r') {
+    return pgm_read_word(notes + offset + 3);
+  } else if (n == 't') {
+    return pgm_read_word(notes + offset + 4);
+  } else if (n == 'y') {
+    return pgm_read_word(notes + offset + 5);
+  } else if (n == 'u') {
+    return pgm_read_word(notes + offset + 6);
+  } else if (n == 'i') {
+    return pgm_read_word(notes + offset + 7);
+  } else if (n == 'o') {
+    return pgm_read_word(notes + offset + 8);
+  } else if (n == 'p') {
+    return pgm_read_word(notes + offset + 9);
+  } else if (n == 'q') {
+    return pgm_read_word(notes + offset + 10);
+  } else if (n == 's') {
+    return pgm_read_word(notes + offset + 11);
+  } else if (n == 'd') {
+    return pgm_read_word(notes + offset + 12);
+  } else if (n == 'f') {
+    return pgm_read_word(notes + offset + 13);
+  } else if (n == 'g') {
+    return pgm_read_word(notes + offset + 14);
+  } else if (n == 'h') {
+    return pgm_read_word(notes + offset + 15);
+  } else if (n == 'j') {
+    return pgm_read_word(notes + offset + 16);
+  } else if (n == 'k') {
+    return pgm_read_word(notes + offset + 17);
+  } else if (n == 'l') {
+    return pgm_read_word(notes + offset + 18);
+  } else if (n == 'm') {
+    return pgm_read_word(notes + offset + 19);
+  } else if (n == 'w') {
+    return pgm_read_word(notes + offset + 20);
+  } else if (n == 'x') {
+    return pgm_read_word(notes + offset + 21);
+  } else if (n == 'c') {
+    return pgm_read_word(notes + offset + 22);
+  } else if (n == 'v') {
+    return pgm_read_word(notes + offset + 23);
+  }
+
+  return 1234;
+}
+
+void play_note(char n) {
+
+  // to calculate the note duration, take one second
+  // divided by the note type.
+  // e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
+  int noteDuration = 1000/duration;
+  
+  int note = select_note(n);
+  Serial.print(" n");
+  Serial.print(note);
+  tone(MUSIC_PIN, note, noteDuration);
+
+  // to distinguish the notes, set a minimum time between them.
+  // the note's duration + 30% seems to work well:
+  int pauseBetweenNotes = noteDuration * 1.0;
+  delay(pauseBetweenNotes);
+  // stop the tone playing:
+  noTone(MUSIC_PIN);
+}
+
 void setup() {
   Serial.begin(115200);
 
   Serial.println("Setup env");
-  playtheme();  
+  // playtheme();
+  //A fast falling tone makes a better laser sound (like the laser 'bullet' is getting further away) than a single tone does. 
+    for(int i=800;i>500;i--){ //Starting at 800 and decreasing to 500
+        tone(MUSIC_PIN,i); //play the tone with pitch equal to variable 'i'
+        delay(1); //delay 1 millisecond before changing the pitch and playing again
+    }
+    noTone(MUSIC_PIN);
+
 }
 
 char escape_buffer[10];
-uint8_t level = 1;
+
 void loop() {
   bool escape = false;
   memset(escape_buffer, 0, 10);
@@ -399,19 +485,19 @@ void loop() {
     } else if (c > 31 && c < 127) { // only ASCII
       if (escape) {
         escape_buffer[escpos++] = c;
-      } else if (c == 'p') {
-        play();
+      //} else if (c == 'p') {
+      //  play();
       } else if (c == 'P') {
         playtheme();
       } else if (c == 'L') {
         duration = 1;
-      } else if (c == 'l') {
-        duration = 2;
-      } else if (c == 's') {
-        duration = 4;
+      //} else if (c == 'l') {
+      //  duration = 2;
+      //} else if (c == 's') {
+      //  duration = 4;
       } else if (c == 'S') {
         duration = 8;
-      } else if ((c >= 'A' && c <= 'G') || (c >= 'a' && c <= 'g')) {
+      } else if ((c >= 'A' && c <= 'G')) {
         if (level == 1) {
           play_note1(c);
         } else if (level == 2) {
@@ -428,6 +514,9 @@ void loop() {
           play_note7(c);
         }*/
         Serial.print(c);
+      } else if (c >= 'a' && c <= 'z') {
+        Serial.print(c);
+        play_note(c);
       } else if (c >= '1' && c <= '7') {
         level = c - '0';
         Serial.print("Level = ");

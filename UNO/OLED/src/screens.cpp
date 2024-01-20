@@ -1,10 +1,6 @@
 #include "common.h"
 
-#ifdef USE_MINICORE
-#include <arduimini.h>
-#else
-#include <Arduino.h>
-#endif
+#include <util/delay.h>
 
 #include <CH1115Display.h>
 
@@ -30,7 +26,7 @@ void drawVictory(CH1115Display *display) {
   display->drawString(40, 24, "YOU WIN");
   display->contrast(0xFF);
   display->breathingEffect(CH1115_ON);
-  delay(5000);
+  _delay_ms(5000);
   display->breathingEffect(CH1115_OFF);
   display->contrast(0x01);
   drawStart(display);

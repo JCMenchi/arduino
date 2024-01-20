@@ -3,13 +3,6 @@
 #include "sprites.h"
 #include <CH1115Display.h>
 
-#ifdef USE_MINICORE
-#include <arduimini.h>
-#else
-#include <Arduino.h>
-#endif
-
-//#define HAS_SERIAL
 
 const uint8_t NB_ALIENS = 8;
 const uint8_t NB_ALIEN_ROW = 4;
@@ -97,16 +90,6 @@ void update_alien_range() {
     }
   }
 
-#ifdef HAS_SERIAL
-  Serial.print("alien range: col ");
-  Serial.print(min_col);
-  Serial.print("-");
-  Serial.print(max_col);
-  Serial.print(" row ");
-  Serial.print(min_row);
-  Serial.print("-");
-  Serial.println(max_row);
-#endif
 }
 
 void do_update_alien(CH1115Display *display) {
@@ -211,21 +194,11 @@ bool kill_alien(uint8_t x, uint8_t y) {
     // check if it is an explosion and skip it
     if (aliens[col + row * NB_ALIENS] >= 3 ||
         aliens[col + row * NB_ALIENS] == 0) {
-#ifdef HAS_SERIAL
-      Serial.print("Hit alien explosion: ");
-      Serial.print(col);
-      Serial.print(" , ");
-      Serial.println(row);
-#endif
+
       return false;
     }
     aliens[col + row * NB_ALIENS] = 3; // start explosion frame
-#ifdef HAS_SERIAL
-    Serial.print("Hit alien: ");
-    Serial.print(col);
-    Serial.print(" , ");
-    Serial.println(row);
-#endif
+
     return true;
   }
 

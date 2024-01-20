@@ -68,24 +68,8 @@ void delay(unsigned long ms);
 /* Delay for the given number of microseconds.  Assumes a 1, 8, 12, 16, 20 or 24 MHz clock. */
 void delayMicroseconds(unsigned int us);
 
-class HardwareSerial
-{
-  public:
-    HardwareSerial() {}
-    void begin(unsigned long baud);
-    
-    int available(void);
-
-    int read(void);
-   
-	void print(const char* t);
-	void println(const char* t);
-	void print(unsigned long i);
-	void println(unsigned long l);
-	void print(uint8_t i, uint8_t base);
-};
-
-extern HardwareSerial Serial;
+void tone(uint8_t _pin, unsigned int frequency, unsigned long duration = 0);
+void noTone(uint8_t _pin);
 
 #endif
 

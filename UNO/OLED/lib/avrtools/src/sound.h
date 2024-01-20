@@ -2,7 +2,8 @@
 #define _SOUND_H
 
 #include <stdint.h>
-#include <Arduino.h>
+#include <avr/io.h>
+#include <util/delay.h>
 
 #define NOTE_B0  31
 #define NOTE_C1  33
@@ -106,14 +107,21 @@ const uint8_t sound_loop[] = { NOTE_AS2, NOTE_GS2, NOTE_FS2, NOTE_F2 };
 const uint16_t SOUND_LOOP_NOTE_DURATION = 800;
 const uint16_t SOUND_LOOP_NOTE_PAUSE = 200;
 
-const uint8_t MUSIC_PIN = 8;
+#define MUSIC_PORT PORTB
+#define MUSIC_DDR DDRB
+const uint8_t MUSIC_PIN = PORTB0;
+
+void start_sound();
+
+void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin_on_port, unsigned int frequency, unsigned long duration);
+void stopNote();
 
 inline void start_sound() {
-    tone(MUSIC_PIN,NOTE_B5,100);
-    delay(100);
-    tone(MUSIC_PIN,NOTE_E6,850);
-    delay(800);
-    noTone(MUSIC_PIN);
+    playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_B5, 100);
+    _delay_ms(100);
+    playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_E6, 850);
+    _delay_ms(800);
+    stopNote();
 }
 
 #endif

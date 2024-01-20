@@ -6,16 +6,6 @@
 #include "TinyI2CMaster.h"
 #include "bitmap_font.h"
 
-#define HAS_SERIAL
-
-#ifdef HAS_SERIAL
-#ifdef USE_MINICORE
-#include <arduimini.h>
-#else
-#include <Arduino.h>
-#endif
-#endif
-
 #define CH1115_Swap(a, b)                                                      \
   {                                                                            \
     uint8_t t = a;                                                             \
@@ -26,15 +16,9 @@
 CH1115Display::CH1115Display(uint8_t w, uint8_t h) {
   _width = w;
   _height = h;
-#ifdef BACK_BUFFER
-  _buffer = new PageBuffer(_width);
-#endif
 }
 
 CH1115Display::~CH1115Display() {
-#ifdef BACK_BUFFER
-  delete _buffer;
-#endif
 }
 
 #define CH1115_STATUS 0x15
@@ -758,92 +742,3 @@ void CH1115Display::stop_data(uint8_t byte) {
   TinyI2C.write(byte);
   TinyI2C.stop();
 }
-
-#ifdef BACK_BUFFER
-void CH1115Display::drawPixelBuf(uint8_t x, uint8_t y, uint8_t colour) {
-  if ((x >= this->_buffer->width) || (y >= this->_buffer->height)) {
-    return;
-  }
-  uint16_t offset = (this->_buffer->width * (y / 8)) + x;
-  switch (colour) {
-  case CH1115_WHITE_COLOR:
-    this->_buffer->screenBuffer[offset] |= (1 << (y & 7));
-    break;
-  case CH1115_BLACK_COLOR:
-    this->_buffer->screenBuffer[offset] &= ~(1 << (y & 7));
-    break;
-  case CH1115_INVERSE_COLOR:
-    this->_buffer->screenBuffer[offset] ^= (1 << (y & 7));
-    break;
-  }
-}
-
-void CH1115Display::update() {
-  uint8_t tx, ty;
-  uint16_t offset = 0;
-  uint8_t page = this->_buffer->yoffset / 8;
-
-  for (ty = 0; ty < this->_buffer->height; ty = ty + 8) {
-    if (this->_buffer->yoffset + ty < 0 ||
-        this->_buffer->yoffset + ty >= _height) {
-      continue;
-    }
-
-    setAddress(this->_buffer->xoffset, page * 8);
-    page++;
-
-    for (tx = 0; tx < this->_buffer->width; tx++) {
-      if (this->_buffer->xoffset + tx < 0 ||
-          this->_buffer->xoffset + tx >= _width) {
-        continue;
-      }
-      offset = (this->_buffer->width * (ty / 8)) + tx;
-      send_data(this->_buffer->screenBuffer[offset++]);
-    }
-  }
-}
-
-void CH1115Display::drawChar(uint8_t x, uint8_t y, unsigned char c,
-                             uint8_t color, uint8_t bg) {
-
-  if ((x >= _width) || ((x + FONT_CHAR_WIDTH) >= _width) || (y >= _height) ||
-      ((y + FONT_CHAR_HEIGHT - 1) >= _height)) {
-    return;
-  }
-
-  for (int8_t i = 0; i < (FONT_CHAR_WIDTH + 1); i++) {
-    uint8_t line;
-    if (i == FONT_CHAR_WIDTH) {
-      line = 0x0;
-    } else {
-      line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH) + i);
-    }
-
-    for (int8_t j = 0; j < FONT_CHAR_HEIGHT; j++) {
-      if (line & 0x1) {
-        drawPixelBuf(x + i, y + j, color);
-      } else if (bg != color) {
-        drawPixelBuf(x + i, y + j, bg);
-      }
-      line >>= 1;
-    }
-  }
-}
-
-void CH1115Display::drawStringBuf(uint8_t x, uint8_t y, const char *pText) {
-  _buffer->clearBuffer();
-  _buffer->yoffset = y;
-
-  uint8_t cursor_x = x;
-  while (*pText != '\0') {
-    drawChar(cursor_x, 0, *pText, CH1115_WHITE_COLOR, CH1115_BLACK_COLOR);
-    cursor_x = cursor_x + FONT_CHAR_WIDTH + 1;
-    if (cursor_x > _width)
-      break;
-    pText++;
-  }
-
-  update();
-}
-
-#endif

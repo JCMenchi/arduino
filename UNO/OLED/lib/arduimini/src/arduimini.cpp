@@ -225,44 +225,12 @@ void delayMicroseconds(unsigned int us)
 	// return = 4 cycles
 }
 
-void HardwareSerial::begin(unsigned long baud) {
-	SERIAL_BEGIN();
+void tone(uint8_t _pin, unsigned int frequency, unsigned long duration = 0) {
+	
 }
 
-int HardwareSerial::available(void) {
-	return serial_available();
+void noTone(uint8_t _pin) {
+
 }
-
-int HardwareSerial::read(void) {
-	return serial_getc();
-}
-
-void HardwareSerial::print(const char* t) {
-	serial_puts((uint8_t*)t, strlen(t));
-}
-
-void HardwareSerial::println(const char* t) {
-	serial_puts((uint8_t*)t, strlen(t));
-	serial_putc('\n');
-}
-
-void HardwareSerial::print(uint8_t i, uint8_t base) {
-	char buf[8];
-	snprintf(buf, 8, "%d", i);
-}
-
-void HardwareSerial::print(unsigned long i) {
-	char buf[16];
-	snprintf(buf, 8, "%d", i);
-}
-
-
-void HardwareSerial::println(unsigned long l) {
-	print(l);
-	serial_putc('\n');
-}
-
-
-HardwareSerial Serial;
 
 #endif

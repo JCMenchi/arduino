@@ -5,14 +5,6 @@
 #include "sprites.h"
 #include "sound.h"
 
-#ifdef USE_MINICORE
-#include <arduimini.h>
-#else
-#include <Arduino.h>
-#endif
-
-// #define HAS_SERIAL
-
 uint8_t missile_state = 0;
 
 uint8_t x_missile = 0;
@@ -40,30 +32,19 @@ void move_spaceship(uint8_t direction) {
 
 void spaceship_action(uint8_t action) {
   if (action == GUNFIRE_ACTION && missile_state == 0) {
-    tone(MUSIC_PIN, NOTE_G4, 35);
+    playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_G4, 35);
     x_missile = x_position + SPRITE_WIDTH / 2;
     y_missile = 0;
     missile_state = 1;
-#ifdef HAS_SERIAL
-    Serial.println("Shoot");
-#endif
   }
 }
 
 void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display) {
-#ifdef HAS_SERIAL
-  Serial.print("Hit something missile: ");
-  Serial.print(x);
-  Serial.print(" , ");
-  Serial.println(y);
-#endif
 
   if ((ymin <= 55 && ymin >= 48) || (ymax <= 55 && ymax >= 48)) {
-#ifdef HAS_SERIAL
-    Serial.println("Hit shelter");
-#endif
-    noTone(MUSIC_PIN);
-    tone(MUSIC_PIN, NOTE_D1, 35);
+
+    stopNote();
+    playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_D1, 100);
     missile_state = 0;
     y_missile = 0;
     display->startPageDrawing(x_missile - 1, 48);
@@ -73,13 +54,10 @@ void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display
     display->endPageDrawing();
   } else {
 
-#ifdef HAS_SERIAL
-    Serial.println("Hit alien");
-#endif
     bool k = kill_alien(x, ymin) || kill_alien(x, ymax);
     if (k) {
-      noTone(MUSIC_PIN);
-      tone(MUSIC_PIN, NOTE_C7, 35);
+      stopNote();
+      playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 100);
       clear_missile(x_missile, y_missile, display);
       missile_state = 0;
       y_missile = 0;
@@ -96,14 +74,6 @@ uint8_t draw_missile(uint8_t x, uint8_t y, CH1115Display *display) {
       missile_pattern = 0x0F;
     }
 
-#ifdef HAS_SERIAL
-    Serial.print("Draw missile: ");
-    Serial.print(x_missile);
-    Serial.print(" , ");
-    Serial.print(y_missile);
-    Serial.print(" , ");
-    Serial.println(missile_pattern, 16);
-#endif
     display->startPageDrawing(x_missile, y_missile);
     uint8_t prev =
         display->updatePageColumn(missile_pattern, OVERWRITE_MODE, missile_pattern);
@@ -149,9 +119,6 @@ void update_missile(CH1115Display *display) {
   } else {
     missile_state = 0;
     y_missile = 0;
-#ifdef HAS_SERIAL
-    Serial.println("Missile left without hitting anything.");
-#endif
   }
 }
 

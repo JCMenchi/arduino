@@ -40,8 +40,6 @@
 #define XOR_MODE 2
 #define AND_MODE 3
 
-// uncomment to active double buffer
-// #define BACK_BUFFER
 
 class CH1115Display {
 public:
@@ -81,41 +79,7 @@ public:
   void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
                   const uint8_t *data, uint8_t mode);
 
-#ifdef BACK_BUFFER
-  // Bufferred drawing
-  void drawPixelBuf(uint8_t x, uint8_t y, uint8_t color);
-  void drawStringBuf(uint8_t x, uint8_t y, const char *pText);
-#endif
-
 private:
-#ifdef BACK_BUFFER
-  class PageBuffer {
-  public:
-    PageBuffer(uint8_t w) {
-      width = w;
-      screenBuffer = new uint8_t[width];
-      height = 8;
-      xoffset = 0;
-      yoffset = 0;
-    }
-    ~PageBuffer() { delete[] screenBuffer; }
-
-    void clearBuffer() { memset(this->screenBuffer, 0x00, this->width); }
-
-    uint8_t *screenBuffer;
-    uint8_t width;
-    uint8_t height;
-    uint8_t xoffset;
-    uint8_t yoffset;
-  };
-  void update();
-  PageBuffer *_buffer;
-
-  void drawChar(uint8_t x, uint8_t y, unsigned char c, uint8_t color,
-                uint8_t bg);
-
-#endif
-
   void setAddress(uint8_t x, uint8_t y);
 
   void drawHLine(uint8_t x0, uint8_t x1, uint8_t y0, uint8_t color);

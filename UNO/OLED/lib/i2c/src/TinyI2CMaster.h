@@ -16,7 +16,7 @@ class TinyI2CMaster {
 
 public:
   TinyI2CMaster();
-  void init(void);
+  void init(bool fast = false);
   uint8_t read(void);
   uint8_t readLast(void);
   bool write(uint8_t data);
