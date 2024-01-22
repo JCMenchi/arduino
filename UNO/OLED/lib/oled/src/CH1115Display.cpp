@@ -6,6 +6,12 @@
 #include "TinyI2CMaster.h"
 #include "bitmap_font.h"
 
+#define HAS_SERIAL
+
+#ifdef HAS_SERIAL
+#include <usart_serial.h>
+#endif
+
 #define CH1115_Swap(a, b)                                                      \
   {                                                                            \
     uint8_t t = a;                                                             \
@@ -38,7 +44,7 @@ void CH1115Display::init(uint8_t contrast) {
   bool con = TinyI2C.start(CH1115_I2C_ADDRESS, 1);
   if (!con) {
 #ifdef HAS_SERIAL
-    Serial.println("I2C connect error");
+    USART_WriteString("I2C connect error.\n");
 #endif
     return;
   }
@@ -48,22 +54,24 @@ void CH1115Display::init(uint8_t contrast) {
   TinyI2C.stop();
 
 #ifdef HAS_SERIAL
-  Serial.print("Screen status register: 0x");
-  Serial.print(u, 16);
+  USART_WriteString("Screen status register: ");
+  USART_WriteInt(u);
+  USART_WriteString("\n");
 
   uint8_t id = u & 0x3F;
-  Serial.print(" Device ID: ");
-  Serial.print(id, 2);
+  USART_WriteString(" Device ID: ");
+  USART_WriteInt(id);
+  USART_WriteString("\n");
 #endif
 
   uint8_t on = u & 0x40;
   if (on == 0) {
 #ifdef HAS_SERIAL
-    Serial.println(" is ON");
+    USART_WriteString(" is ON\n");
 #endif
   } else {
 #ifdef HAS_SERIAL
-    Serial.println(" is OFF");
+    USART_WriteString(" is OFF\n");
 #endif
     // turn on
     send_command(0xAF);
