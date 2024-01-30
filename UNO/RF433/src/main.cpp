@@ -1,256 +1,96 @@
-#include <Arduino.h>
+#include "usart_serial.h"
+#include "SSD1306Display.h"
 
-// decalaration for RF433
-const uint8_t PIN_RFINPUT = 2;
+#include <MyVirtualWire.h>
 
-//#include <VirtualWire.h>
+#include <stdlib.h>
 
-/*
+#include <util/delay.h>
+
+SSD1306Display display(128, 32);
+
+
 void setup()
 {
-  Serial.begin(115200); // Debugging only
-  Serial.println("setup");
+  USART_Init(BAUD_RATE_115200, NULL);
+  USART_WriteString("Welcome\n");
 
+  display.enable(1);
+  display.init(0x01);
+  display.flip(SSD1306_OFF);
+
+  display.drawScreen(0x0, true);
+
+  display.drawLine(3,3,125,30, SSD1306_WHITE_COLOR);
+  _delay_ms(2000);
+
+  display.drawString(32,16, "1234567890");
+  display.drawString(2,0,"Line1: ");
+  display.drawString(2,8,"Line2: Hello");
+  display.drawString(2,24,"Line4: World");
+
+  //display.scrollArea(1, 2, 2, 126, SSD1306_SCROLL_VERTICAL_LEFT, SSD1306_SCROLL_2FRAMES);
+  //display.scroll(SSD1306_SCROLL_ON);
+
+  _delay_ms(2000);
+  for(uint8_t i = 0; i < 16; ++i) {
+    display.scrollOnce(0, 3, 0, 127, SSD1306_SCROLL_LEFT);
+    _delay_ms(10);
+  }
+ 
+  _delay_ms(50000);
+  display.scroll(SSD1306_SCROLL_OFF);
+
+  display.scrollArea(0, 3, 50, 100, SSD1306_SCROLL_VERTICAL_LEFT, SSD1306_SCROLL_128FRAMES);
+  display.scroll(SSD1306_SCROLL_ON);
+  
+  _delay_ms(5);
+  display.scroll(SSD1306_SCROLL_OFF);
+
+  _delay_ms(50000);
+  display.scroll(SSD1306_SCROLL_OFF);
+  display.drawScreen(0x0);
+  display.drawPixel(5, 5, SSD1306_WHITE_COLOR);
+  display.drawPixel(127, 31, SSD1306_WHITE_COLOR);
+
+  _delay_ms(30000);
+  display.drawScreen(0x0);
+
+  display.drawLine(0,16, 127,16, SSD1306_WHITE_COLOR);
+  display.drawLine(0,24, 127,24, SSD1306_WHITE_COLOR);
+
+  display.drawLine(32,0,32,31, SSD1306_WHITE_COLOR);
+  display.drawLine(64,0,64,31, SSD1306_WHITE_COLOR);
+  display.drawLine(100,0,100,31, SSD1306_WHITE_COLOR);
+
+  _delay_ms(30000);
   // Initialise the IO and ISR
-  // vw_set_ptt_inverted(true); // Required for DR3100
-  vw_setup(2000); // Bits per sec
-  vw_set_rx_pin(PIN_RFINPUT);
-  vw_rx_start(); // Start the receiver PLL running
+  myvw_setup(500); // Bits per sec
+  myvw_rx_start();
 }
+
+uint8_t ypos = 0;
 
 void loop()
 {
-
   uint8_t buf[VW_MAX_MESSAGE_LEN];
   uint8_t buflen = VW_MAX_MESSAGE_LEN;
-  digitalWrite(13, true);
-  if (vw_get_message(buf, &buflen)) // Non-blocking
+
+  if (myvw_get_message(buf, &buflen)) // Non-blocking
   {
-    int i;
-
-    digitalWrite(13, true); // Flash a light to show received good message
     // Message with a good checksum received, dump it.
-    Serial.print("Got: ");
+    USART_WriteString("Got: ");
 
-    for (i = 0; i < buflen; i++)
-    {
-      Serial.print((char)buf[i]);
-      //Serial.print(buf[i], HEX);
-      //Serial.print(" ");
-    }
-    Serial.println("");
-    digitalWrite(13, false);
-  } else {
-
-  }
-
-  delay(200);
-  digitalWrite(13, true);
-  delay(500);
-  digitalWrite(13, false);
-}
-*/
-
-#include <CH1115Display.h>
-
-CH1115Display ch1115(128, 64);
-
-const uint8_t MAX_COLUMN = 21;
-const uint8_t MAX_LINE = 8;
-uint8_t textpos = 0;
-uint8_t curline = 0;
-uint8_t escpos = 0;
-char line_buffer[MAX_COLUMN + 1];
-char escape_buffer[10];
-
-void reset_line() {
-  memset(line_buffer, ' ', MAX_COLUMN + 1);
-  line_buffer[0] = '>';
-  line_buffer[MAX_COLUMN] = 0;
-  textpos = 2;
-}
-
-void setup()
-{
-  reset_line();
-  Serial.begin(115200);
-  Serial.println(F("screen init"));
-
-  // init OLED display
-  ch1115.init(0x01);
-  ch1115.enable(CH1115_ON);
-  ch1115.flip(CH1115_ON);
-  ch1115.drawScreen(0x00);
-
-  // draw some text
-  ch1115.drawString(0, 0, (char*)"the quick brown fox, ");
-  ch1115.drawString(0, 8, (char*)"jumps over the lazy dog");
-  ch1115.drawString(0, 16, (char*)"jumps over the lazy dog");
-  ch1115.drawString(0, 24, (char*)"jumps over the lazy dog");
-  ch1115.drawString(0, 32, (char*)"A B C D E F G H I J K L ");
-  ch1115.drawString(0, 40, (char*)"M N O P Q R S T U V W X ");
-  ch1115.drawString(0, 48, (char*)"Y Z 0 1 2 3 4 5 6 7 8 9 ");
-  ch1115.drawString(0, 56, (char*)"Y Z 0 1 2 3 4 5 6 7 8 9 ");
-
-  
-}
-
-void command(char c) {
-  if (c == 'F') {
-    ch1115.breathingEffect(CH1115_ON);
-  } else if (c == 'f') {
-    ch1115.breathingEffect(CH1115_OFF);
-  } else if (c == 'p') {
-    ch1115.drawPixel(0,0,CH1115_WHITE_COLOR);
-  } else if (c == 'O') {
-    ch1115.enable(CH1115_ON);
-  } else if (c == 'o') {
-    ch1115.enable(CH1115_OFF);
-  } else if (c == 'I') {
-    ch1115.invert(CH1115_ON);
-  } else if (c == 'i') {
-    ch1115.invert(CH1115_OFF);
-  } else if (c == 'L') {
-    ch1115.flip(CH1115_ON);
-  } else if (c == 'l') {
-    ch1115.flip(CH1115_OFF);
-  } else if (c == 'S') {
-    ch1115.scrollArea(0, 7, 0, 127, CH1115_SCROLL_LEFT, CH1115_SCROLL_2FRAMES);
-    ch1115.scroll(CH1115_SCROLL_ONE_COLUMN);
-  } else if (c == 's') {
-    ch1115.scroll(CH1115_SCROLL_OFF);
-  } else if (c == 'H') {
-    ch1115.scrollArea(2, 5, 32, 96, CH1115_SCROLL_RIGHT, CH1115_SCROLL_2FRAMES);
-    ch1115.scroll(CH1115_SCROLL_CONTINUOUS);
-  } else if (c == 'h') {
-    ch1115.scroll(CH1115_SCROLL_OFF);
+    USART_WriteString((const char*)buf);
+    USART_WriteString("\n");
+    display.drawString(0,ypos,(const char*)buf);
+    ypos = (ypos + 8) % 32;
+    USART_WriteString("Good: ");
+    USART_WriteInt(myvw_get_rx_good());
+    USART_WriteString(" Bad: ");
+    USART_WriteInt(myvw_get_rx_bad());
+    USART_WriteString("\n");
   }
 }
 
-void loop()
-{
-  bool escape = false;
-  memset(escape_buffer, 0, 10);
-  escpos = 0;
-  uint8_t readchar = 0;
-
-  while (Serial.available()) {
-    readchar++;
-    char c = Serial.read();
-    Serial.print("Get char: ");
-    Serial.println(c, 10);
-    if (c == '\n' || c == '\r') {
-      ch1115.drawString(0, curline*8, line_buffer);
-      curline++;
-      if (curline >= MAX_LINE) {
-        curline = 0;
-      }
-      reset_line();
-      Serial.print("Curline: ");
-      Serial.println(curline);
-    } else if (c == 27) { // escape
-      escape = true;
-      Serial.println("Start escape");
-    } else if (c == '\b' || c == 127) { // backspace or delete
-      textpos--;
-      if (textpos < 2) {
-        textpos = 2;
-      }
-      line_buffer[textpos] = ' ';
-    } else if (c > 31 && c < 127) { // only ASCII
-      if (escape) {
-        escape_buffer[escpos++] = c;
-      } else {
-        line_buffer[textpos] = c;
-        textpos++;
-        if (textpos == MAX_COLUMN) {
-          ch1115.drawString(0, curline*8, line_buffer);
-          curline++;
-          if (curline >= MAX_LINE) {
-            curline = 0;
-          }
-          memset(line_buffer, ' ', MAX_COLUMN + 1);
-          line_buffer[MAX_COLUMN] = 0;
-          textpos = 0;
-        }
-      }
-      command(c);
-    }
-    
-  }
-
-  if (escape) {
-    Serial.print("Current ESC buffer: ");
-    Serial.println(escape_buffer);
-  }
-  if (readchar) {
-    Serial.print(readchar);
-    Serial.print(" Current line buffer: ");
-    Serial.println(line_buffer);
-  }
-  ch1115.drawString(0, curline*8, line_buffer);
-}
-
-
-void loop2()
-{
-  bool escape = false;
-  memset(escape_buffer, 0, 10);
-  escpos = 0;
-  uint8_t readchar = 0;
-
-  while (Serial.available()) {
-    readchar++;
-    char c = Serial.read();
-    Serial.print("Get char: ");
-    Serial.println(c, 10);
-    if (c == '\n') {
-      // display.drawString((char *)line_buffer, 0, curline*8);
-      curline++;
-      if (curline >= MAX_LINE) {
-        curline = 0;
-      }
-      reset_line();
-      Serial.print("Curline: ");
-      Serial.println(curline);
-    } else if (c == 27) { // escape
-      escape = true;
-      Serial.println("Start escape");
-    } else if (c == '\b' || c == 127) { // backspace or delete
-      textpos--;
-      if (textpos < 2) {
-        textpos = 2;
-      }
-      line_buffer[textpos] = ' ';
-    } else if (c > 31 && c < 127) { // only ASCII
-      if (escape) {
-        escape_buffer[escpos++] = c;
-      } else {
-        line_buffer[textpos] = c;
-        textpos++;
-        if (textpos == MAX_COLUMN) {
-          // display.drawString((char *)line_buffer, 0, curline*8);
-          curline++;
-          if (curline >= MAX_LINE) {
-            curline = 0;
-          }
-          memset(line_buffer, ' ', MAX_COLUMN + 1);
-          line_buffer[MAX_COLUMN] = 0;
-          textpos = 0;
-        }
-      }
-    }
-    
-  }
-
-  if (escape) {
-    Serial.print("Current ESC buffer: ");
-    Serial.println(escape_buffer);
-  }
-  if (readchar) {
-    Serial.print(readchar);
-    Serial.print(" Current line buffer: ");
-    Serial.println(line_buffer);
-  }
-  // display.drawString((char *)line_buffer, 0, curline*8);
-}
+#include <main.cpp.h>

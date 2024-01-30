@@ -10,40 +10,8 @@
 
 // Standard ASCII 5x7 font ,default.
 const PROGMEM unsigned char small_font[] = {
-    0x00, 0x00, 0x00, 0x00, 0x00,
-    0x3E, 0x5B, 0x4F, 0x5B, 0x3E, // :)
-    0x3E, 0x6B, 0x4F, 0x6B, 0x3E,
-    0x1C, 0x3E, 0x7C, 0x3E, 0x1C,
-    0x18, 0x3C, 0x7E, 0x3C, 0x18,
-    0x1C, 0x57, 0x7D, 0x57, 0x1C,
-    0x1C, 0x5E, 0x7F, 0x5E, 0x1C,
-    0x00, 0x18, 0x3C, 0x18, 0x00,
-    0xFF, 0xE7, 0xC3, 0xE7, 0xFF,
-    0x00, 0x18, 0x24, 0x18, 0x00,
-    0xFF, 0xE7, 0xDB, 0xE7, 0xFF,
-    0x30, 0x48, 0x3A, 0x06, 0x0E,
-    0x26, 0x29, 0x79, 0x29, 0x26,
-    0x40, 0x7F, 0x05, 0x05, 0x07,
-    0x40, 0x7F, 0x05, 0x25, 0x3F,
-    0x5A, 0x3C, 0xE7, 0x3C, 0x5A,
-    0x7F, 0x3E, 0x1C, 0x1C, 0x08,
-    0x08, 0x1C, 0x1C, 0x3E, 0x7F,
-    0x14, 0x22, 0x7F, 0x22, 0x14,
-    0x5F, 0x5F, 0x00, 0x5F, 0x5F,
-    0x06, 0x09, 0x7F, 0x01, 0x7F,
-    0x00, 0x66, 0x89, 0x95, 0x6A,
-    0x60, 0x60, 0x60, 0x60, 0x60,
-    0x94, 0xA2, 0xFF, 0xA2, 0x94,
-    0x08, 0x04, 0x7E, 0x04, 0x08,
-    0x10, 0x20, 0x7E, 0x20, 0x10,
-    0x08, 0x08, 0x2A, 0x1C, 0x08,
-    0x08, 0x1C, 0x2A, 0x08, 0x08,
-    0x1E, 0x10, 0x10, 0x10, 0x10,
-    0x0C, 0x1E, 0x0C, 0x1E, 0x0C,
-    0x30, 0x38, 0x3E, 0x38, 0x30,
-    0x06, 0x0E, 0x3E, 0x0E, 0x06,
     0x00, 0x00, 0x00, 0x00, 0x00, // Space
-    0x00, 0x00, 0x5F, 0x00, 0x00, // !
+    0x00, 0x00, 0x5F, 0x00, 0x00,
     0x00, 0x07, 0x00, 0x07, 0x00,
     0x14, 0x7F, 0x14, 0x7F, 0x14,
     0x24, 0x2A, 0x7F, 0x2A, 0x12,
@@ -132,10 +100,10 @@ const PROGMEM unsigned char small_font[] = {
     0x3C, 0x40, 0x30, 0x40, 0x3C,
     0x44, 0x28, 0x10, 0x28, 0x44,
     0x4C, 0x90, 0x90, 0x90, 0x7C,
-    0x44, 0x64, 0x54, 0x4C, 0x44, // z
-    0x00, 0x08, 0x36, 0x41, 0x00, // {
-    0x00, 0x00, 0x77, 0x00, 0x00, // |
-    0x00, 0x41, 0x36, 0x08, 0x00  // }
+    0x44, 0x64, 0x54, 0x4C, 0x44,
+    0x00, 0x08, 0x36, 0x41, 0x00,
+    0x00, 0x00, 0x77, 0x00, 0x00,
+    0x00, 0x41, 0x36, 0x08, 0x00 
 #ifdef ASCII_EXT
     ,
     0x02, 0x01, 0x02, 0x04, 0x02, // capital letter c with cedilla
@@ -271,3 +239,170 @@ const PROGMEM unsigned char small_font[] = {
 };
 
 #endif
+
+//            ASCII TABLE
+//
+//  ┌─────┬───────╥───────┬──────╥───────┬─────╥──────┬──────╥───────┬─────┐
+//  | Dec |  Chr  ║   Dec | Chr  ║  Dec  | Chr ║  Dec |  Chr ║   Dec | Chr |
+//  ├─────┼───────╫───────┼──────╫───────┼─────╫──────┼──────╫───────┼─────┤
+//  │  0  │  NUL  ║   26  │ SUB  ║  52   │ 4   ║  78  │  N   ║  104  │ h   │
+//  │  1  │  SOH  ║   27  │ ESC  ║  53   │ 5   ║  79  │  O   ║  105  │ i   │
+//  │  2  │  STX  ║   28  │ FS   ║  54   │ 6   ║  80  │  P   ║  106  │ j   │
+//  │  3  │  ETX  ║   29  │ GS   ║  55   │ 7   ║  81  │  Q   ║  107  │ k   │
+//  │  4  │  EOT  ║   30  │ RS   ║  56   │ 8   ║  82  │  R   ║  108  │ l   │
+//  │  5  │  ENQ  ║   31  │ US   ║  57   │ 9   ║  83  │  S   ║  109  │ m   │
+//  │  6  │  ACK  ║   32  │      ║  58   │ :   ║  84  │  T   ║  110  │ n   │
+//  │  7  │  BEL  ║   33  │ !    ║  59   │ ;   ║  85  │  U   ║  111  │ o   │
+//  │  8  │  BS   ║   34  │ "    ║  60   │ <   ║  86  │  V   ║  112  │ p   │
+//  │  9  │  HT   ║   35  │ #    ║  61   │ =   ║  87  │  W   ║  113  │ q   │
+//  │ 10  │  LF   ║   36  │ $    ║  62   │ >   ║  88  │  X   ║  114  │ r   │
+//  │ 11  │  VT   ║   37  │ %    ║  63   │ ?   ║  89  │  Y   ║  115  │ s   │
+//  │ 12  │  FF   ║   38  │ &    ║  64   │ @   ║  90  │  Z   ║  116  │ t   │
+//  │ 13  │  CR   ║   39  │ '    ║  65   │ A   ║  91  │  [   ║  117  │ u   │
+//  │ 14  │  SO   ║   40  │ (    ║  66   │ B   ║  92  │  \   ║  118  │ v   │
+//  │ 15  │  SI   ║   41  │ )    ║  67   │ C   ║  93  │  ]   ║  119  │ w   │
+//  │ 16  │  DLE  ║   42  │ *    ║  68   │ D   ║  94  │  ^   ║  120  │ x   │
+//  │ 17  │  DC1  ║   43  │ +    ║  69   │ E   ║  95  │  _   ║  121  │ y   │
+//  │ 18  │  DC2  ║   44  │ ,    ║  70   │ F   ║  96  │  `   ║  122  │ z   │
+//  │ 19  │  DC3  ║   45  │ -    ║  71   │ G   ║  97  │  a   ║  123  │ {   │
+//  │ 20  │  DC4  ║   46  │ .    ║  72   │ H   ║  98  │  b   ║  124  │ |   │
+//  │ 21  │  NAK  ║   47  │ /    ║  73   │ I   ║  99  │  c   ║  125  │ }   │
+//  │ 22  │  SYN  ║   48  │ 0    ║  74   │ J   ║ 100  │  d   ║  126  │ ~   │
+//  │ 23  │  ETB  ║   49  │ 1    ║  75   │ K   ║ 101  │  e   ║  127  │ DEL │
+//  │ 24  │  CAN  ║   50  │ 2    ║  76   │ L   ║ 102  │  f   ║       │     │
+//  │ 25  │  EM   ║   51  │ 3    ║  77   │ M   ║ 103  │  g   ║       │     │ 
+//  └─────┴───────╨───────┴──────╨───────┴─────╨──────┴──────╨───────┴─────┘
+
+//  Extended ASCII 
+//  ┌─────┬─────┬───────────────────────────────────────────────────────────┐
+//  │ Dec │ Chr │ Description                                               │
+//  ├─────┼─────┼───────────────────────────────────────────────────────────┤
+//  │ 128 │ Ç   │ Latin Capital Letter C With Cedilla                       │
+//  │ 129 │ ü   │ Latin Small Letter U With Diaeresis                       │
+//  │ 130 │ é   │ Latin Small Letter E With Acute                           │
+//  │ 131 │ â   │ Latin Small Letter A With Circumflex                      │
+//  │ 132 │ ä   │ Latin Small Letter A With Diaeresis                       │
+//  │ 133 │ à   │ Latin Small Letter A With Grave                           │
+//  │ 134 │ å   │ Latin Small Letter A With Ring Above                      │
+//  │ 135 │ ç   │ Latin Small Letter C With Cedilla                         │
+//  │ 136 │ ê   │ Latin Small Letter E With Circumflex                      │
+//  │ 137 │ ë   │ Latin Small Letter E With Diaeresis                       │
+//  │ 138 │ è   │ Latin Small Letter E With Grave                           │
+//  │ 139 │ ï   │ Latin Small Letter I With Diaeresis                       │
+//  │ 140 │ î   │ Latin Small Letter I With Circumflex                      │
+//  │ 141 │ ì   │ Latin Small Letter I With Grave                           │
+//  │ 142 │ Ä   │ Latin Capital Letter A With Diaeresis                     │
+//  │ 143 │ Å   │ Latin Capital Letter A With Ring Above                    │
+//  │ 144 │ É   │ Latin Capital Letter E With Acute                         │
+//  │ 145 │ §   │ Latin Small Letter Ae                                     │
+//  │ 146 │ Æ   │ Latin Capital Letter Ae                                   │
+//  │ 147 │ ô   │ Latin Small Letter O With Circumflex                      │
+//  │ 148 │ ö   │ Latin Small Letter O With Diaeresis                       │
+//  │ 149 │ ò   │ Latin Small Letter O With Grave                           │
+//  │ 150 │ û   │ Latin Small Letter U With Circumflex                      │
+//  │ 151 │ ù   │ Latin Small Letter U With Grave                           │
+//  │ 152 │ ÿ   │ Latin Small Letter Y With Diaeresis                       │
+//  │ 153 │ Ö   │ Latin Capital Letter O With Diaeresis                     │
+//  │ 154 │ Ü   │ Latin Capital Letter U With Diaeresis                     │
+//  │ 155 │ ¢   │ Cent Sign                                                 │
+//  │ 156 │ £   │ Pound Sign, Pound Sterling, Irish Punt, Lira Sign         │
+//  │ 157 │ ¥   │ Yen Sign, Yuan Sign                                       │
+//  │ 158 │ ₧   │ Peseta Sign                                               │
+//  │ 159 │ ƒ   │ Latin Small Letter F With Hook, Function Symbol           │
+//  │ 160 │ á   │ Latin Small Letter A With Acute                           │
+//  │ 161 │ í   │ Latin Small Letter I With Acute                           │
+//  │ 162 │ ó   │ Latin Small Letter O With Acute                           │
+//  │ 163 │ ú   │ Latin Small Letter U With Acute                           │
+//  │ 164 │ ñ   │ Latin Small Letter N With Tilde, Small Letter Enye        │
+//  │ 165 │ Ñ   │ Latin Capital Letter N With Tilde, Capital Letter Enye    │
+//  │ 166 │ ª   │ Feminine Ordinal Indicator                                │
+//  │ 167 │ º   │ Masculine Ordinal Indicator                               │
+//  │ 168 │ ¿   │ Inverted Question Mark, Turned Question Mark              │
+//  │ 169 │ ⌐   │ Reversed Not Sign, Beginning Of Line                      │
+//  │ 170 │ ¬   │ Not Sign, Angled Dash                                     │
+//  │ 171 │ ½   │ Vulgar Fraction One Half                                  │
+//  │ 172 │ ¼   │ Vulgar Fraction One Quarter                               │
+//  │ 173 │ ¡   │ Inverted Exclamation Mark                                 │
+//  │ 174 │ «   │ Left Guillemet, Chevrons                                  │
+//  │ 175 │ »   │ Right Guillemet                                           │
+//  │ 176 │ ░   │ Light Shade                                               │
+//  │ 177 │ ▒   │ Medium Shade, Speckles Fill, Dotted Fill                  │
+//  │ 178 │ ▓   │ Dark Shade                                                │
+//  │ 179 │ │   │ Box Drawings Light Vertical                               │
+//  │ 180 │ ┤   │ Box Drawings Light Vertical And Left                      │
+//  │ 181 │ ╡   │ Box Drawings Vertical Single And Left Double              │
+//  │ 182 │ ╢   │ Box Drawings Vertical Double And Left Single              │
+//  │ 183 │ ╖   │ Box Drawings Down Double And Left Single                  │
+//  │ 184 │ ╕   │ Box Drawings Down Single And Left Double                  │
+//  │ 185 │ ╣   │ Box Drawings Double Vertical And Left                     │
+//  │ 186 │ ║   │ Box Drawings Double Vertical                              │
+//  │ 187 │ ╗   │ Box Drawings Double Down And Left                         │
+//  │ 188 │ ╝   │ Box Drawings Double Up And Left                           │
+//  │ 189 │ ╜   │ Box Drawings Up Double And Left Single                    │
+//  │ 190 │ ╛   │ Box Drawings Up Single And Left Double                    │
+//  │ 191 │ ┐   │ Box Drawings Light Down And Left                          │
+//  │ 192 │ └   │ Box Drawings Light Up And Right                           │
+//  │ 193 │ ┴   │ Box Drawings Light Up And Horizontal                      │
+//  │ 194 │ ┬   │ Box Drawings Light Down And Horizontal                    │
+//  │ 195 │ ├   │ Box Drawings Light Vertical And Right                     │
+//  │ 196 │ ─   │ Box Drawings Light Horizontal                             │
+//  │ 197 │ ┼   │ Box Drawings Light Vertical And Horizontal                │
+//  │ 198 │ ╞   │ Box Drawings Vertical Single And Right Double             │
+//  │ 199 │ ╟   │ Box Drawings Vertical Double And Right Single             │
+//  │ 200 │ ╚   │ Box Drawings Double Up And Right                          │
+//  │ 201 │ ╔   │ Box Drawings Double Down And Right                        │
+//  │ 202 │ ╩   │ Box Drawings Double Up And Horizontal                     │
+//  │ 203 │ ╦   │ Box Drawings Double Down And Horizontal                   │
+//  │ 204 │ ╠   │ Box Drawings Double Vertical And Right                    │
+//  │ 205 │ ═   │ Box Drawings Double Horizontal                            │
+//  │ 206 │ ╬   │ Box Drawings Double Vertical And Horizontal               │
+//  │ 207 │ ╧   │ Box Drawings Up Single And Horizontal Double              │
+//  │ 208 │ ╨   │ Box Drawings Up Double And Horizontal Single              │
+//  │ 209 │ ╤   │ Box Drawings Down Single And Horizontal Double            │
+//  │ 210 │ ╥   │ Box Drawings Down Double And Horizontal Single            │
+//  │ 211 │ ╙   │ Box Drawings Up Double And Right Single                   │
+//  │ 212 │ ╘   │ Box Drawings Up Single And Right Double                   │
+//  │ 213 │ ╒   │ Box Drawings Down Single And Right Double                 │
+//  │ 214 │ ╓   │ Box Drawings Down Double And Right Single                 │
+//  │ 215 │ ╫   │ Box Drawings Vertical Double And Horizontal Single        │
+//  │ 216 │ ╪   │ Box Drawings Vertical Single And Horizontal Double        │
+//  │ 217 │ ┘   │ Box Drawings Light Up And Left                            │
+//  │ 218 │ ┌   │ Box Drawings Light Down And Right                         │
+//  │ 219 │ █   │ Full Block, Solid Block                                   │
+//  │ 220 │ ▄   │ Lower Half Block                                          │
+//  │ 221 │ ▌   │ Left Half Block                                           │
+//  │ 222 │ ▐   │ Right Half Block                                          │
+//  │ 223 │ ▀   │ Upper Half Block                                          │
+//  │ 224 │ α   │ Greek Small Letter Alpha                                  │
+//  │ 225 │ ß   │ Latin Small Letter Sharp S, Eszett                        │
+//  │ 226 │ Γ   │ Greek Capital Letter Gamma                                │
+//  │ 227 │ π   │ Greek Small Letter Pi                                     │
+//  │ 228 │ Σ   │ Greek Capital Letter Sigma                                │
+//  │ 229 │ σ   │ Greek Small Letter Sigma                                  │
+//  │ 230 │ µ   │ Micro Sign                                                │
+//  │ 231 │ τ   │ Greek Capital Letter Tau                                  │
+//  │ 232 │ Φ   │ Greek Capital Letter Phi                                  │
+//  │ 233 │ Θ   │ Greek Capital Letter Theta                                │
+//  │ 234 │ Ω   │ Greek Capital Letter Omega                                │
+//  │ 235 │ δ   │ Greek Small Letter Delta                                  │
+//  │ 236 │ ∞   │ Infinity                                                  │
+//  │ 237 │ φ   │ Greek Small Letter Phi                                    │
+//  │ 238 │ ε   │ Greek Small Letter Epsilon                                │
+//  │ 239 │ ∩   │ Intersection                                              │
+//  │ 240 │ ≡   │ Identical To                                              │
+//  │ 241 │ ±   │ Plus-Minus Sign                                           │
+//  │ 242 │ ≥   │ Greater-Than Or Equal To                                  │
+//  │ 243 │ ≤   │ Less-Than Or Equal To                                     │
+//  │ 244 │ ⌠   │ Top Half Integral                                         │
+//  │ 245 │ ⌡   │ Bottom Half Integral                                      │
+//  │ 246 │ ÷   │ Division Sign, Obelus                                     │
+//  │ 247 │ ≈   │ Almost Equal To, Asymptotic To                            │
+//  │ 248 │ °   │ Degree Sign                                               │
+//  │ 249 │ ∙   │ Bullet Operator                                           │
+//  │ 250 │ ·   │ Middle Dot, Interpunct                                    │
+//  │ 251 │ √   │ Square Root, Radical Sign                                 │
+//  │ 252 │ ⁿ   │ Superscript Latin Small Letter N                          │
+//  │ 253 │ ²   │ Superscript Two, Squared                                  │
+//  │ 254 │ ■   │ Black Square                                              │
+//  │ 255 │     │ Non-Breaking Space, NBSP                                  │
+//  └─────┴─────┴───────────────────────────────────────────────────────────┘
