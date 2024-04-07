@@ -49,6 +49,8 @@ void init_timer() {
 
 #if defined(__AVR_ATtiny45__)
 ISR(TIMER0_COMPA_vect) { _milliseconds++; }
+#elif defined(__AVR_ATmega328P__)
+ISR(TIMER0_COMPA_vect) { _milliseconds++; }
 #else
 ISR(TIMER0_COMP_vect) { _milliseconds++; }
 #endif

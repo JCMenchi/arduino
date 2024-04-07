@@ -2,7 +2,7 @@
 #include "usart_serial.h"
 
 #include <stdlib.h>
-
+#include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
@@ -55,7 +55,7 @@ uint8_t USART_GetLastChar() {}
 #define _UCSZ1 UCSZ1
 #define _FE FE
 
-#else
+#elif defined(__AVR_ATmega328P__)
 
 #define _UBRRH UBRR0H
 #define _UBRRL UBRR0L
@@ -70,6 +70,9 @@ uint8_t USART_GetLastChar() {}
 
 #define _UCSRC UCSR0C
 #define _RXC RXC0
+#define _UCSZ0 UCSZ00
+#define _UCSZ1 UCSZ01
+#define _FE FE0
 
 #endif
 
@@ -170,11 +173,37 @@ static char numberbuffer[12];
 
 void USART_WriteInt(int32_t i, uint8_t base) {
   ltoa(i, numberbuffer, base);
+  if (base == 16) {
+    USART_WriteString("0x");
+    if (i < 16) USART_WriteString("0");
+  } else if (base == 2) {
+    USART_WriteString("0b");
+    if (i < 255) {
+      size_t nbzero = 8 - strlen(numberbuffer);
+      while(nbzero) {
+        nbzero--;
+        USART_WriteString("0");
+      }
+    }
+  }
   USART_WriteString(numberbuffer);
 }
 
 void USART_WriteUInt(uint32_t i, uint8_t base) {
   ultoa(i, numberbuffer, base);
+  if (base == 16) {
+    USART_WriteString("0x");
+    if (i < 16) USART_WriteString("0");
+  } else if (base == 2) {
+    USART_WriteString("0b");
+    if (i < 255) {
+      size_t nbzero = 8 - strlen(numberbuffer);
+      while(nbzero) {
+        nbzero--;
+        USART_WriteString("0");
+      }
+    }
+  }
   USART_WriteString(numberbuffer);
 }
 
