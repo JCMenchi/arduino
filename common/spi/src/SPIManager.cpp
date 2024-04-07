@@ -16,6 +16,7 @@
 #include <avr/common.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 
 #include "SPIManager.h"
 
@@ -150,6 +151,27 @@ bool SPIManager::execCommand(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffe
     return success;
 }
 
+void SPIManager::begin() {
+    // CS low to start transmit
+    PORT_SPI &= ~(_BV(DD_CS));
+    _delay_ms(5); 
+}
+
+void SPIManager::end() {
+    // CS high to end transmit
+    PORT_SPI |= _BV(DD_CS);
+}
+
+bool SPIManager::send(uint8_t data) {
+    if (this->isSlave()) return false; // not used if slave
+
+    SPDR = data;
+    // Wait for send complete
+    loop_until_bit_is_set(SPSR, SPIF);
+    
+    return true;
+}
+
 bool SPIManager::sendCommand(uint8_t& command) {
     if (this->isSlave()) return false; // not used if slave
 
@@ -173,6 +195,21 @@ bool SPIManager::sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inb
         do { } while (bit_is_clear(SPSR, SPIF));
         // copy Data Register
         inbuffer[i] = SPDR;
+    }
+    
+    return true;
+}
+
+bool SPIManager::sendCommandData(uint8_t size, uint8_t* inoutbuffer) {
+    if (this->isSlave()) return false; // not used if slave
+
+    for(uint8_t i =0; i < size; i++) {
+        // copy output byte
+        SPDR = inoutbuffer[i];
+        // Wait for send complete
+        do { } while (bit_is_clear(SPSR, SPIF));
+        // copy Data Register
+        inoutbuffer[i] = SPDR;
     }
     
     return true;

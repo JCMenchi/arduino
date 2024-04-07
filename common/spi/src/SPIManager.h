@@ -30,8 +30,12 @@ public:
 
     void startMaster();
     bool isMaster() const { return ((this->_statusRegister & SPI_MODE_MASK) == SPI_MODE_MASTER); }
+    void begin();
+    void end();
+    bool send(uint8_t data);
     bool sendCommand(uint8_t& command);
     bool sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffer);
+    bool sendCommandData(uint8_t size, uint8_t* inoutbuffer);
 
 private:
     uint8_t _state;
