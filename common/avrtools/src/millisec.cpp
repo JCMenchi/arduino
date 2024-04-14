@@ -3,7 +3,6 @@
 #include <avr/interrupt.h>
 #include <util/atomic.h>
 
-
 volatile uint32_t _milliseconds = 0;
 
 uint32_t milliseconds() {
