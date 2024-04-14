@@ -1,87 +1,82 @@
 #include "usart_serial.h"
+#include <avr/io.h>
 #include <stddef.h>
 #include <util/delay.h>
-#include <avr/io.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "nrf24l01.h"
-#include "nrf24l01-mnemonics.h"
+#include "millisec.h"
+
 #include "SPIManager.h"
+#include "nrf24mgr.h"
 
-/*
-#include "SPI.h"
-#include "nRF24L01.h"
-#include "RF24.h"
 
-#include <printf.h>
+const uint8_t RADIO_CE_PIN = 1;
 
-const uint64_t pipe = 0xF0F1F2F3F4LL;
-RF24 radio(9,10);
+SPIManager spi;
+NRF24Manager radio;
 
 void setup() {
-  pinMode(A1, INPUT);
-  Serial.begin(115200);
+  // init serial com
+  USART_Init(BAUD_RATE_115200, SerialCommandMgr::serialInput);
 
-  radio.begin();
+  // init SPI bus to control NRF24
+  spi.startMaster();
 
-  if (radio.isValid()) {
-    Serial.print("Radio OK: nRF24L01");
-    if (radio.isPVariant()) {
-      Serial.println("+");
-    } else {
-      Serial.println("");
-    }
-  } else {
-    Serial.println("Radio KO");
-  }
+  // init NRF24
+  _delay_ms(100); // give some time to NRF24 module to start
+  radio.init(&spi, RADIO_CE_PIN, 0);
 
-  if (radio.isChipConnected()) {
-    Serial.println("Radio Connected");
-  } else {
-    Serial.println("Radio Not found");
-  }
+  // ready to enter main loop
+  USART_WriteString("UNO Ready\n");
 
-  radio.setChannel(0); // sélectionner le canal radio (0 à 127)
-
-  // vitesse: RF24_250KBPS, RF24_1MBPS ou RF24_2MBPS
-  radio.setDataRate(RF24_1MBPS);
-  // puissance: RF24_PA_MIN=-18dBm, RF24_PA_LOW=-12dBm, RF24_PA_MED=-6dBM
-  radio.setPALevel(RF24_PA_LOW);
-
-  // printf_begin();
-  // char buffer[1024];
-  // radio.sprintfPrettyDetails(buffer);
-  // Serial.print(buffer);
-  // radio.printPrettyDetails();
-
-  radio.openWritingPipe(pipe);
-  radio.stopListening();
+  radio.summary();
 }
-*/
 
+void execCommand(const char* cmd) {
+  // check if command is defined
+  if (cmd == NULL || strlen(cmd) ==0) return;
 
-void setup() {
-  USART_Init(BAUD_RATE_115200, NULL);
-  USART_WriteString("Ready\n");
-
-  nrf24_init(&DDRB, &PORTB, 1, &DDRB, &PORTB, 2);
-  nrf24_start_listening();
+  // USART_WriteString("Exec command: ");
+  // USART_WriteString(cmd);
+  // USART_WriteString("\n\n");
+  if (strcmp(cmd, "status") == 0) {
+    radio.summary();
+  } else if (strcmp(cmd, "info") == 0) {
+    radio.info();
+  } else if (strcmp(cmd, "reset") == 0) {
+    radio.reset();
+  } else if (strcmp(cmd, "on") == 0) {
+    radio.changeState(NRF24_POWERUP);
+    radio.listen();
+  } else if (strcmp(cmd, "off") == 0) {
+    radio.changeState(NRF24_POWERDOWN);
+  } else if (strlen(cmd) > 0) {
+    radio.send(cmd);
+    _delay_ms(100);
+    radio.listen();
+  }
 }
 
 void loop() {
 
-  //
-  unsigned int r = nrf24_available();
-  if (r) {
-      const char* msg = nrf24_read_message();
-      USART_WriteString("msg[");
-      USART_WriteInt(r);
-      USART_WriteString("]= '");
-      USART_WriteString(msg);
-      USART_WriteString("'\n");
+  if (SerialCommandMgr::hasCommand()) {
+    execCommand(SerialCommandMgr::command());
   }
-  
+
+  if (radio.dataAvailable()) {
+    // get current time
+    uint32_t now = milliseconds() / 1000;
+
+    USART_WriteString("now ");
+    USART_WriteUInt(now);
+    USART_WriteString("s: ");
+    const char *msg = radio.read_message();
+    USART_WriteString(msg);
+    USART_WriteString("\n");
+  }
+
 
 }
-
 
 #include <main.cpp.h>
