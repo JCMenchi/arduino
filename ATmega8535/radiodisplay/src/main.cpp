@@ -1,22 +1,24 @@
-
+#include "usart_serial.h"
 #include <stddef.h>
 #include <util/delay.h>
 #include <avr/io.h>
 #include <avr/wdt.h>
 #include <stdlib.h>
 #include <string.h>
+#include <avr/pgmspace.h>
 
 #include "millisec.h"
 #include "nrf24mgr.h"
 #include "SPIManager.h"
 #include <gpio.h>
-#include "usart_serial.h"
+#include <SSD1306Display.h>
 
 const uint8_t ON_LED_PIN = 0;
 const uint8_t RADIO_COM_LED_PIN = 1;
 
 const uint8_t RADIO_CE_PIN = 2;
 
+SSD1306Display display(128, 32);
 SPIManager spi;
 NRF24Manager radio;
 
@@ -49,6 +51,12 @@ void setup() {
   _delay_ms(100); // give some time to NRF24 module to start
   radio.init(&spi, RADIO_CE_PIN, 0);
 
+  // init OLED display
+  display.init(0x20);
+  display.flip(SSD1306_OFF);
+  display.drawScreen(0x00);
+  display.drawPString(0, SSD1306_LINE0, PSTR("ATmega8535 Ready"));
+
   // ready to enter main loop
   USART_WriteString("ATmega8535 Ready\n");
 
@@ -58,7 +66,9 @@ void setup() {
 void execCommand(const char* cmd) {
   // check if command is defined
   if (cmd == NULL || strlen(cmd) ==0) return;
-
+  display.clearPage(0);
+  display.drawString(0, SSD1306_LINE0, "EXE:");
+  display.drawString(26, SSD1306_LINE0, cmd);
   // USART_WriteString("Exec command: ");
   // USART_WriteString(cmd);
   // USART_WriteString("\n\n");
@@ -74,6 +84,9 @@ void execCommand(const char* cmd) {
   } else if (strcmp(cmd, "off") == 0) {
     radio.changeState(NRF24_POWERDOWN);
   } else if (strlen(cmd) > 0) {
+    display.clearPage(1);
+    display.drawString(0, SSD1306_LINE1, "SND:");
+    display.drawString(26, SSD1306_LINE1, cmd);
     GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
     radio.send(cmd);
     _delay_ms(100); // wait to see LED
@@ -98,6 +111,9 @@ void loop() {
       USART_WriteString("s: ");
       USART_WriteString(msg);
       USART_WriteString("\n");
+      display.clearPage(2);
+      display.drawString(0, SSD1306_LINE2, "REC:");
+      display.drawString(26, SSD1306_LINE2, msg);
     }
   }
 
