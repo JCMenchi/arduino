@@ -15,6 +15,12 @@
 #define SSD1306_OFF 0
 #define SSD1306_ON 1
 
+// line
+#define SSD1306_LINE0 0
+#define SSD1306_LINE1 8
+#define SSD1306_LINE2 16
+#define SSD1306_LINE3 24
+
 // Scrolling definition
 #define SSD1306_SCROLL_RIGHT 0
 #define SSD1306_SCROLL_LEFT 1
@@ -62,13 +68,15 @@ public:
   void drawScreen(uint8_t pattern, bool border = false);
   void drawPage(uint8_t p, uint8_t pattern);
   void drawPage(uint8_t p, uint8_t startcol, uint8_t nbcol, uint8_t pattern);
+  void clearPage(uint8_t p) { drawPage(p, 0); }
 
   // Drawing
   uint8_t updatePagePixel(uint8_t y, uint8_t colour);
   uint8_t updatePageColumn(uint8_t pattern, uint8_t mode, uint8_t mask = 0xFF);
 
   void drawString(uint8_t x, uint8_t y, const char *pText);
-  
+  void drawPString(uint8_t x, uint8_t y, const char *pText);
+
   void drawPixel(uint8_t x, uint8_t y, uint8_t color);
   void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);
   void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h,

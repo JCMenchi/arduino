@@ -67,6 +67,10 @@ SSD1306Display::~SSD1306Display() {
 //   4 .. other twi error (lost bus arbitration, bus error, ..)
 //   5 .. timeout
 void SSD1306Display::init(uint8_t contrast) {
+
+  #ifdef HAS_SERIAL
+  USART_WriteString("I2C connect...\n");
+  #endif
   // Init I2C com
   TinyI2C.init();
 
@@ -679,6 +683,68 @@ void SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
       this->updatePageColumn(0x00, 0, mask);
 
       startText++;
+    }
+  }
+}
+
+void SSD1306Display::drawPString(uint8_t x, uint8_t y, const char *pText) {
+  if (y + FONT_CHAR_HEIGHT > this->_height) {
+    return;
+  }
+
+  uint8_t page_offset = y % 8;
+  uint8_t mask = (page_offset) ? (0xFF << page_offset) : 0xFF;
+
+  this->setAddress(x, y);
+
+  for (uint8_t i=0; i < strlen_P(pText); i++) {
+    if ((x + FONT_CHAR_WIDTH + 1) > this->_width) {
+      break;
+    }
+    // draw
+    char c = pgm_read_byte(&(pText[i]));
+
+    uint8_t line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH));
+    if (page_offset) {
+      line = (line << page_offset);
+    }
+    this->updatePageColumn(line, 0, mask);
+
+    for (int8_t i = 1; i < FONT_CHAR_WIDTH; i++) {
+      line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH) + i);
+      if (page_offset) {
+        line = (line << page_offset);
+      }
+      this->updatePageColumn(line, 0, mask);
+    }
+
+    // draw empty vert line to separate char
+    this->updatePageColumn(0x00, 0, mask);
+  }
+
+  if (page_offset) {
+    // draw second part
+    mask = (0xFF >> (8 - page_offset));
+    this->setAddress(x, y + 8);
+    for (uint8_t i=0; i < strlen_P(pText); i++) {
+      if ((x + FONT_CHAR_WIDTH + 1) > this->_width) {
+        break;
+      }
+      // draw
+      char c = pgm_read_byte(&(pText[i]));
+
+      uint8_t line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH));
+      line = (line >> (8 - page_offset));
+      this->updatePageColumn(line, 0, mask);
+
+      for (int8_t i = 1; i < FONT_CHAR_WIDTH; i++) {
+        line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH) + i);
+        line = (line >> (8 - page_offset));
+        this->updatePageColumn(line, 0, mask);
+      }
+
+      // draw empty vert line to separate char
+      this->updatePageColumn(0x00, 0, mask);
     }
   }
 }

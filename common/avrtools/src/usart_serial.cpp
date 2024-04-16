@@ -5,6 +5,7 @@
 #include <avr/io.h>
 #include <stdlib.h>
 #include <string.h>
+#include <avr/pgmspace.h>
 
 #if defined(__AVR_ATtiny45__)
 
@@ -167,6 +168,15 @@ void USART_Transmit(unsigned char data) {
 void USART_WriteString(const char *str) {
   while (*str)
     USART_Transmit(*str++);
+}
+
+void USART_WritePString(const char *str) {
+  uint8_t c;
+  for (uint8_t i=0; i < strlen_P(str); i++)
+  {
+      c = pgm_read_byte(&(str[i]));
+      USART_Transmit(c);
+  }
 }
 
 static char numberbuffer[12];

@@ -14,7 +14,7 @@ void USART_Transmit(uint8_t data);
 uint8_t USART_Receive();
 
 void USART_WriteString(const char *str);
-
+void USART_WritePString(const char* str);
 void USART_WriteInt(int32_t i, uint8_t base = 10);
 void USART_WriteUInt(uint32_t i, uint8_t base = 10);
 
