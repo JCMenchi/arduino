@@ -230,6 +230,10 @@ void TinyI2CMaster::init(bool fast) {
   // ATMega8535 => SCL = PC0 SDA = PC1
   DDRC &= ~((1 << DDC0)|(1 << DDC1));
   PORTC |= (1 << PORTC0) | (1 << PORTC1);
+#elif defined (__AVR_ATmega1284P__)
+  // ATMega8535 => SCL = PC0 SDA = PC1
+  DDRC &= ~((1 << DDC0)|(1 << DDC1));
+  PORTC |= (1 << PORTC0) | (1 << PORTC1);
 #else
   #error "No yet configured, check datasheet"
 #endif

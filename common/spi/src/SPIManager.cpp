@@ -65,6 +65,14 @@ volatile struct SPIdriverStatus_t spiX_status; //!< The driver status bits.
 #define DD_MISO		DDB4
 #define DD_SCK		DDB5
 #define DD_CS		DDB2
+#elif defined(__AVR_ATmega1284P__)
+#define PORT_SPI    PORTB
+#define PIN_SPI     PINB
+#define DDR_SPI		DDRB
+#define DD_MOSI		DDB5
+#define DD_MISO		DDB6
+#define DD_SCK		DDB7
+#define DD_CS		DDB4
 #endif
 
 void SPIManager::startSlave() {

@@ -50,6 +50,8 @@ void init_timer() {
 ISR(TIMER0_COMPA_vect) { _milliseconds++; }
 #elif defined(__AVR_ATmega328P__)
 ISR(TIMER0_COMPA_vect) { _milliseconds++; }
+#elif defined(__AVR_ATmega1284P__)
+ISR(TIMER0_COMPA_vect) { _milliseconds++; }
 #else
 ISR(TIMER0_COMP_vect) { _milliseconds++; }
 #endif

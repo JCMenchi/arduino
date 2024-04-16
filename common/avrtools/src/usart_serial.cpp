@@ -76,6 +76,25 @@ uint8_t USART_GetLastChar() {}
 #define _UCSZ1 UCSZ01
 #define _FE FE0
 
+#elif defined(__AVR_ATmega1284P__)
+
+#define _UBRRH UBRR0H
+#define _UBRRL UBRR0L
+#define _UCSRA UCSR0A
+#define _UCSRB UCSR0B
+#define _UDR UDR0
+#define _RXEN RXEN0
+#define _TXEN TXEN0
+#define _RXCIE RXCIE0
+#define _UDRE UDRE0
+#define _U2X U2X0
+
+#define _UCSRC UCSR0C
+#define _RXC RXC0
+#define _UCSZ0 UCSZ00
+#define _UCSZ1 UCSZ01
+#define _FE FE0
+
 #endif
 
 /*
@@ -147,7 +166,11 @@ uint8_t USART_Receive() {
 
 volatile uint8_t last_char = 0;
 
+#if defined(__AVR_ATmega1284P__)
+ISR(USART0_RX_vect) {
+#else
 ISR(USART_RX_vect) {
+#endif
   bool error = !bit_is_clear(_UCSRA, _FE);
   last_char = _UDR;
   if (USART_REC_CB != NULL) {
