@@ -6,11 +6,17 @@
 #include <stdio.h>
 #include <string.h>
 #include <util/delay.h>
+#include <avr/pgmspace.h>
 
 // external lib
 #include <SPIManager.h>
 #include <gpio.h>
+
+#define HAS_SERIAL
+
+#ifdef HAS_SERIAL
 #include <usart_serial.h>
+#endif
 
 // include files
 #include "nrf24mgr.h"
@@ -468,141 +474,121 @@ void NRF24Manager::reset() {
   this->writeRegister(EN_AA_REG, &cmd, 1);
 }
 
+#ifdef HAS_SERIAL
 //-------------------------------------------------------------------------------------
 // Print register information for debug
 
 void NRF24Manager::info() {
   uint8_t buffer[5];
-
-  USART_WriteString("NRF24 info:\n");
-
-  this->readRegister(CONFIG_REG, buffer, 1);
-  USART_WriteString("       CONFIG: ");
-  USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  this->summary();
 
   this->readRegister(EN_AA_REG, buffer, 1);
-  USART_WriteString("        EN_AA: ");
+  USART_WritePString(PSTR("        EN_AA: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(EN_RXADDR_REG, buffer, 1);
-  USART_WriteString("    EN_RXADDR: ");
+  USART_WritePString(PSTR("    EN_RXADDR: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(SETUP_AW_REG, buffer, 1);
-  USART_WriteString("     SETUP_AW: ");
+  USART_WritePString(PSTR("     SETUP_AW: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(SETUP_RETR_REG, buffer, 1);
-  USART_WriteString("   SETUP_RETR: ");
+  USART_WritePString(PSTR("   SETUP_RETR: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(RF_CH_REG, buffer, 1);
-  USART_WriteString("        RF_CH: ");
+  USART_WritePString(PSTR("        RF_CH: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(RF_SETUP_REG, buffer, 1);
-  USART_WriteString("     RF_SETUP: ");
+  USART_WritePString(PSTR("     RF_SETUP: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
-
-  this->readRegister(STATUS_REG, buffer, 1);
-  USART_WriteString("       STATUS: ");
-  USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
-
-  this->readRegister(OBSERVE_TX_REG, buffer, 1);
-  USART_WriteString("   OBSERVE_TX: ");
-  USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
-
-  this->readRegister(RPD_REG, buffer, 1);
-  USART_WriteString("          RPD: ");
-  USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
-
-  this->readRegister(FIFO_STATUS_REG, buffer, 1);
-  USART_WriteString("  FIFO_STATUS: ");
-  USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(DYNPD_REG, buffer, 1);
-  USART_WriteString("        DYNPD: ");
+  USART_WritePString(PSTR("        DYNPD: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(FEATURE_REG, buffer, 1);
-  USART_WriteString("      FEATURE: ");
+  USART_WritePString(PSTR("      FEATURE: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(RX_ADDR_P0_REG, buffer, 5);
-  USART_WriteString("   RX_ADDR_P0: ");
+  USART_WritePString(PSTR("   RX_ADDR_P0: "));
   for (uint8_t i = 0; i < 5; i++) {
     USART_WriteUInt(buffer[i], 16);
-    USART_WriteString(",");
+    USART_WritePString(PSTR(","));
   }
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(RX_PW_P0_REG, buffer, 1);
-  USART_WriteString("     RX_PW_P0: ");
+  USART_WritePString(PSTR("     RX_PW_P0: "));
   USART_WriteUInt(buffer[0]);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(RX_ADDR_P1_REG, buffer, 5);
-  USART_WriteString("   RX_ADDR_P1: ");
+  USART_WritePString(PSTR("   RX_ADDR_P1: "));
   for (uint8_t i = 0; i < 5; i++) {
     USART_WriteUInt(buffer[i], 16);
-    USART_WriteString(",");
+    USART_WritePString(PSTR(","));
   }
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(RX_PW_P1_REG, buffer, 1);
-  USART_WriteString("     RX_PW_P1: ");
+  USART_WritePString(PSTR("     RX_PW_P1: "));
   USART_WriteUInt(buffer[0]);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(TX_ADDR_REG, buffer, 5);
-  USART_WriteString("      TX_ADDR: ");
+  USART_WritePString(PSTR("      TX_ADDR: "));
   for (uint8_t i = 0; i < 5; i++) {
     USART_WriteUInt(buffer[i], 16);
-    USART_WriteString(",");
+    USART_WritePString(PSTR(","));
   }
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 }
 
 void NRF24Manager::summary() {
   uint8_t buffer[1];
 
-  USART_WriteString("NRF24 info:\n");
+  USART_WritePString(PSTR("NRF24 info:\n"));
 
   this->readRegister(CONFIG_REG, buffer, 1);
-  USART_WriteString("       CONFIG: ");
+  USART_WritePString(PSTR("       CONFIG: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(STATUS_REG, buffer, 1);
-  USART_WriteString("       STATUS: ");
+  USART_WritePString(PSTR("       STATUS: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(OBSERVE_TX_REG, buffer, 1);
-  USART_WriteString("   OBSERVE_TX: ");
+  USART_WritePString(PSTR("   OBSERVE_TX: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(RPD_REG, buffer, 1);
-  USART_WriteString("          RPD: ");
+  USART_WritePString(PSTR("          RPD: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 
   this->readRegister(FIFO_STATUS_REG, buffer, 1);
-  USART_WriteString("  FIFO_STATUS: ");
+  USART_WritePString(PSTR("  FIFO_STATUS: "));
   USART_WriteUInt(buffer[0], 2);
-  USART_WriteString("\n");
+  USART_WritePString(PSTR("\n"));
 }
+
+#else
+void NRF24Manager::info()  {}
+void NRF24Manager::summary() {}
+#endif
