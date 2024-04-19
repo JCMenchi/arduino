@@ -32,6 +32,15 @@ void init_timer() {
 
   // enable timer 0 compare A
   TIMSK |= (1 << OCIE0A);
+#elif defined(__AVR_ATmega1284P__)
+  TCCR0A = (1 << COM0A1) | (1 << WGM01);
+
+  // set timer 0 prescale factor to 64, so one tick equals 8us
+  TCCR0B = (1 << CS01) | (1 << CS00);
+  OCR0A = 125; // set compare at 125 => 1000us = 1 ms
+
+  // enable timer 0 compare A
+  TIMSK0 |= (1 << OCIE0A);
 #else
   TCCR0A = (1 << COM0A1) | (1 << WGM01);
 
