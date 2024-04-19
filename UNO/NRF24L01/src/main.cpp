@@ -53,29 +53,60 @@ void execCommand(const char* cmd) {
     radio.changeState(NRF24_POWERDOWN);
   } else if (strlen(cmd) > 0) {
     radio.send(cmd);
-    _delay_ms(100);
     radio.listen();
+    _delay_ms(100);
   }
 }
 
-void loop() {
+const uint16_t PERIOD_MS = 5000;
+uint32_t prevTime = 0;
+uint8_t count = 0;
 
+static char number[5];
+
+char ping[7] = "pingXX";
+
+void loop() {
+  uint32_t now = milliseconds();
   if (SerialCommandMgr::hasCommand()) {
     execCommand(SerialCommandMgr::command());
   }
 
   if (radio.dataAvailable()) {
-    // get current time
-    uint32_t now = milliseconds() / 1000;
-
     USART_WriteString("now ");
-    USART_WriteUInt(now);
+    USART_WriteUInt(now/1000);
     USART_WriteString("s: ");
     const char *msg = radio.read_message();
     USART_WriteString(msg);
-    USART_WriteString("\n");
+    
+    if (strncmp(msg, "ping", 4) == 0) {
+        USART_WriteString(" => send pong");
+        radio.send("pong");
+        radio.listen();
+    }
+    USART_WriteString("\n");   
   }
 
+  if (now - prevTime > PERIOD_MS) {
+    ultoa(count, number, 16);
+    ping[4] = number[0];
+    if (count > 15) {
+      ping[5] = number[1];
+    } else {
+      ping[5] = '\0';
+    }
+
+    USART_WriteString("ping at ");
+    USART_WriteUInt(now/1000);
+    USART_WriteString("s '");
+    USART_WriteString(ping);
+    USART_WriteString("'\n");
+    // time to ping
+    radio.send(ping);
+    radio.listen();
+    count++;
+    prevTime = now;
+  }
 
 }
 

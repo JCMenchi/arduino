@@ -63,6 +63,16 @@ void setup() {
   radio.summary();
 }
 
+void sendMsg(const char* msg) {
+  display.clearPage(3);
+  display.drawString(0, SSD1306_LINE3, "SND:");
+  display.drawString(26, SSD1306_LINE3, msg);
+  GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
+  radio.send(msg);
+  radio.listen();
+  GPIO_SET_LOW(A, RADIO_COM_LED_PIN);
+}
+
 void execCommand(const char* cmd) {
   // check if command is defined
   if (cmd == NULL || strlen(cmd) ==0) return;
@@ -74,6 +84,8 @@ void execCommand(const char* cmd) {
   // USART_WriteString("\n\n");
   if (strcmp(cmd, "status") == 0) {
     radio.summary();
+    //chuk.initialize();
+    //chuk.display();
   } else if (strcmp(cmd, "info") == 0) {
     radio.info();
   } else if (strcmp(cmd, "reset") == 0) {
@@ -84,18 +96,20 @@ void execCommand(const char* cmd) {
   } else if (strcmp(cmd, "off") == 0) {
     radio.changeState(NRF24_POWERDOWN);
   } else if (strlen(cmd) > 0) {
-    display.clearPage(3);
-    display.drawString(0, SSD1306_LINE3, "SND:");
-    display.drawString(26, SSD1306_LINE3, cmd);
-    GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
-    radio.send(cmd);
-    _delay_ms(100); // wait to see LED
-    GPIO_SET_LOW(A, RADIO_COM_LED_PIN);
-    radio.listen();
+    sendMsg(cmd);
   }
 }
 
+const uint16_t PERIOD_MS = 15000;
+uint32_t prevTime = 0;
+uint8_t count = 0;
+
+static char number[5];
+
+char ping[7] = "pingXX";
+
 void loop() {
+  uint32_t now = milliseconds();
 
   if (SerialCommandMgr::hasCommand()) {
     execCommand(SerialCommandMgr::command());
@@ -103,18 +117,43 @@ void loop() {
 
   if (radio.dataAvailable()) {
     // get current time
-    uint32_t now = milliseconds()/1000;
     const char* msg = radio.read_message();
     if (msg && strlen(msg) > 0) {
       USART_WriteString("now ");
-      USART_WriteUInt(now);
+      USART_WriteUInt(now/1000);
       USART_WriteString("s: ");
       USART_WriteString(msg);
+      
+      if (strncmp(msg, "pong", 4) == 0) {
+        display.drawString(90, SSD1306_LINE3, msg);
+      } else {
+        display.clearPage(2);
+        display.drawString(0, SSD1306_LINE2, "REC:");
+        display.drawString(26, SSD1306_LINE2, msg);
+      }
+
+      if (strncmp(msg, "ping", 4) == 0) {
+        USART_WriteString(" => send pong");
+        const char* counter = msg+4;
+        display.drawString(100, SSD1306_LINE2,counter);
+        radio.send("pong");
+        radio.listen();
+      }
       USART_WriteString("\n");
-      display.clearPage(2);
-      display.drawString(0, SSD1306_LINE2, "REC:");
-      display.drawString(26, SSD1306_LINE2, msg);
     }
+  }
+
+  if (now - prevTime > PERIOD_MS) {
+    ultoa(count, number, 16);
+    ping[4] = number[0];
+    if (count > 15) {
+      ping[5] = number[1];
+    } else {
+      ping[5] = '\0';
+    }
+    sendMsg(ping);
+    count++;
+    prevTime = now;
   }
 
 }
