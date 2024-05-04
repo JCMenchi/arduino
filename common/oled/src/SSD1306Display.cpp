@@ -1,6 +1,7 @@
 
 #include <avr/pgmspace.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "SSD1306Display.h"
 #include "TinyI2CMaster.h"
@@ -622,10 +623,19 @@ void SSD1306Display::drawString2(uint8_t x, uint8_t y, const char *pText) {
   }
 }
 
-void SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
+uint8_t SSD1306Display::drawInt(uint8_t x, uint8_t y, int32_t i, uint8_t base) {
+  char numberbuffer[12];
+  ltoa(i, numberbuffer, base);
+
+  return drawString(x, y, numberbuffer);
+}
+
+uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
   if (y + FONT_CHAR_HEIGHT > this->_height) {
-    return;
+    return x;
   }
+
+  uint8_t nextpos = x + strlen(pText) * (FONT_CHAR_WIDTH + 1);
 
   uint8_t page_offset = y % 8;
   uint8_t mask = (page_offset) ? (0xFF << page_offset) : 0xFF;
@@ -685,12 +695,16 @@ void SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
       startText++;
     }
   }
+
+  return nextpos;
 }
 
-void SSD1306Display::drawPString(uint8_t x, uint8_t y, const char *pText) {
+uint8_t SSD1306Display::drawPString(uint8_t x, uint8_t y, const char *pText) {
   if (y + FONT_CHAR_HEIGHT > this->_height) {
-    return;
+    return x;
   }
+
+  uint8_t nextpos = x + strlen_P(pText) * (FONT_CHAR_WIDTH + 1);
 
   uint8_t page_offset = y % 8;
   uint8_t mask = (page_offset) ? (0xFF << page_offset) : 0xFF;
@@ -747,6 +761,8 @@ void SSD1306Display::drawPString(uint8_t x, uint8_t y, const char *pText) {
       this->updatePageColumn(0x00, 0, mask);
     }
   }
+
+  return nextpos;
 }
 
 void SSD1306Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh,

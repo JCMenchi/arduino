@@ -17,6 +17,9 @@ void USART_WriteString(const char *str);
 void USART_WritePString(const char* str);
 void USART_WriteInt(int32_t i, uint8_t base = 10);
 void USART_WriteUInt(uint32_t i, uint8_t base = 10);
+void USART_WriteChar(char d);
+
+void USART_WriteFloat(float d, uint8_t width = 11, uint8_t prec = 2);
 
 uint8_t USART_GetLastChar();
 

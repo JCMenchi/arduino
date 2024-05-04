@@ -188,6 +188,10 @@ void USART_Transmit(unsigned char data) {
   _UDR = data;
 }
 
+void USART_WriteChar(char d) {
+  USART_Transmit(d);
+}
+
 void USART_WriteString(const char *str) {
   while (*str)
     USART_Transmit(*str++);
@@ -239,6 +243,11 @@ void USART_WriteUInt(uint32_t i, uint8_t base) {
       }
     }
   }
+  USART_WriteString(numberbuffer);
+}
+
+void USART_WriteFloat(float d, uint8_t width, uint8_t prec) {
+  dtostrf(d, width, prec, numberbuffer);
   USART_WriteString(numberbuffer);
 }
 

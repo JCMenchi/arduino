@@ -155,7 +155,7 @@ uint8_t NRF24Manager::readRegister(uint8_t reg, uint8_t *data, uint8_t size) {
 
 //-------------------------------------------------------------------------------------
 // SPI init
-void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t autoack) {
+void NRF24Manager::init(SPIManager *s, uint8_t ce_pin) {
   this->_ce_pin = ce_pin;
   this->_spi = s;
 
@@ -198,9 +198,15 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t autoack) {
   _delay_ms(2);
 
   // Enhanced ShockBurst Auto-acknowledge
-  cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
-        (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
-        (0 << EN_AA_REG_ENAA_P1) | (0 << EN_AA_REG_ENAA_P0);
+  if (this->_autoack) {
+    cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
+          (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
+          (0 << EN_AA_REG_ENAA_P1) | (1 << EN_AA_REG_ENAA_P0);
+  } else {
+    cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
+          (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
+          (0 << EN_AA_REG_ENAA_P1) | (0 << EN_AA_REG_ENAA_P0);
+  }
   this->writeRegister(EN_AA_REG, &cmd, 1);
 
   // set address width to 3 bytes
@@ -208,7 +214,11 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t autoack) {
   this->writeRegister(SETUP_AW_REG, &cmd, 1);
 
   // Set retries
-  cmd = 0xF0; // use max delay of 4000us (F) with 1 retry (1)
+  if (this->_autoack) {
+    cmd = 0xF1; // use max delay of 4000us (F) with 1 retry (1)
+  } else {
+    cmd = 0xF0; // use max delay of 4000us (F) with 1 retry (1)
+  }
   this->writeRegister(SETUP_RETR_REG, &cmd, 1);
 
   // Sets the frequency channel
@@ -233,7 +243,7 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t autoack) {
   this->writeRegister(DYNPD_REG, &cmd, 1);
 
   // Enable dynamic payload and autoack if set
-  if (autoack) {
+  if (this->_autoack) {
     cmd = (1 << FEATURE_REG_EN_DPL) | (1 << FEATURE_REG_EN_ACK_PAY) |
           (1 << FEATURE_REG_EN_DYN_ACK);
   } else {
@@ -407,8 +417,6 @@ uint8_t NRF24Manager::send(const char *msg) {
   // Flush TX/RX and clear TX interrupt
   this->writeRegister(NRF24CMD_FLUSH_RX, 0, 0);
   this->writeRegister(NRF24CMD_FLUSH_TX, 0, 0);
-  uint8_t data = (1 << STATUS_REG_TX_DS);
-  this->writeRegister(STATUS_REG, &data, 1);
 
   // Disable interrupt on RX
   // this->readRegister(CONFIG_REG, &data, 1);
@@ -417,7 +425,7 @@ uint8_t NRF24Manager::send(const char *msg) {
 
   // Start SPI, load message into TX_PAYLOAD
   this->_spi->begin();
-  this->_spi->send(NRF24CMD_W_TX_PAYLOAD); // auto ack is active
+  this->_spi->send(NRF24CMD_W_TX_PAYLOAD);
   while (length--)
     this->_spi->send(*(uint8_t *)msg++);
   this->_spi->send(0);
@@ -425,15 +433,16 @@ uint8_t NRF24Manager::send(const char *msg) {
 
   // Send message by pulling CE high for more than 10us
   this->cehigh();
-  ;
-  _delay_ms(1); // up to 4 ms
+  _delay_us(15); // up to 4 ms
   this->celow();
-  ;
 
-  // Wait for message to be sent (TX_DS flag raised)
-  this->readRegister(STATUS_REG, &data, 1);
-  while (!(data & (1 << STATUS_REG_TX_DS)))
+  if (!this->_autoack) {
+    uint8_t data = 0;
+    // Wait for message to be sent (TX_DS flag raised)
     this->readRegister(STATUS_REG, &data, 1);
+    while (!(data & (1 << STATUS_REG_TX_DS)))
+      this->readRegister(STATUS_REG, &data, 1);
+  }
 
   // Enable interrupt on RX
   // this->readRegister(CONFIG_REG, &data, 1);
@@ -446,7 +455,9 @@ uint8_t NRF24Manager::send(const char *msg) {
   return 1;
 }
 
-void NRF24Manager::reset() {
+void NRF24Manager::reset(uint8_t autoack) {
+  this->_autoack = autoack;
+
   // Flush TX/RX and clear TX interrupt
   this->writeRegister(NRF24CMD_FLUSH_RX, 0, 0);
   this->writeRegister(NRF24CMD_FLUSH_TX, 0, 0);
@@ -468,10 +479,37 @@ void NRF24Manager::reset() {
 
   // NRF24 needs some time after power up to be stable
   _delay_ms(2);
-  cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
-        (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
-        (0 << EN_AA_REG_ENAA_P1) | (0 << EN_AA_REG_ENAA_P0);
+
+  // Enhanced ShockBurst Auto-acknowledge
+  if (this->_autoack) {
+    cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
+          (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
+          (0 << EN_AA_REG_ENAA_P1) | (1 << EN_AA_REG_ENAA_P0);
+  } else {
+    cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
+          (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
+          (0 << EN_AA_REG_ENAA_P1) | (0 << EN_AA_REG_ENAA_P0);
+  }
   this->writeRegister(EN_AA_REG, &cmd, 1);
+
+
+  // Set retries
+  if (this->_autoack) {
+    cmd = 0xF1; // use max delay of 4000us (F) with 1 retry (1)
+  } else {
+    cmd = 0xF0; // use max delay of 4000us (F) with 1 retry (1)
+  }
+  this->writeRegister(SETUP_RETR_REG, &cmd, 1);
+
+  // Enable dynamic payload and autoack if set
+  if (this->_autoack) {
+    cmd = (1 << FEATURE_REG_EN_DPL) | (1 << FEATURE_REG_EN_ACK_PAY) |
+          (1 << FEATURE_REG_EN_DYN_ACK);
+  } else {
+    cmd = (1 << FEATURE_REG_EN_DPL) | (0 << FEATURE_REG_EN_ACK_PAY) |
+          (0 << FEATURE_REG_EN_DYN_ACK);
+  }
+  this->writeRegister(FEATURE_REG, &cmd, 1);
 }
 
 #ifdef HAS_SERIAL

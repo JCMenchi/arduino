@@ -74,8 +74,9 @@ public:
   uint8_t updatePagePixel(uint8_t y, uint8_t colour);
   uint8_t updatePageColumn(uint8_t pattern, uint8_t mode, uint8_t mask = 0xFF);
 
-  void drawString(uint8_t x, uint8_t y, const char *pText);
-  void drawPString(uint8_t x, uint8_t y, const char *pText);
+  uint8_t drawInt(uint8_t x, uint8_t y, int32_t i, uint8_t base);
+  uint8_t drawString(uint8_t x, uint8_t y, const char *pText);
+  uint8_t drawPString(uint8_t x, uint8_t y, const char *pText);
 
   void drawPixel(uint8_t x, uint8_t y, uint8_t color);
   void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);

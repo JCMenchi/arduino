@@ -17,9 +17,9 @@ class SPIManager;
 
 class NRF24Manager {
 public:
-  NRF24Manager() : _state(NRF24_INIT), _ce_pin(1), _spi(NULL) {}
+  NRF24Manager(uint8_t autoack) : _state(NRF24_INIT), _ce_pin(1), _spi(NULL), _autoack(autoack) {}
 
-  void init(SPIManager *s, uint8_t ce_pin, uint8_t autoack);
+  void init(SPIManager *s, uint8_t ce_pin);
 
   void changeState(uint8_t state);
   uint8_t state() const { return this->_state; }
@@ -33,7 +33,7 @@ public:
   void summary();
   void info();
 
-  void reset();
+  void reset(uint8_t autoack);
 
 private:
   void celow();
@@ -46,6 +46,7 @@ private:
   uint8_t _state;
   uint8_t _ce_pin;
   SPIManager *_spi;
+  uint8_t _autoack;
 };
 
 #endif

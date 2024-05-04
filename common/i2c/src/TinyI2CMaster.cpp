@@ -12,6 +12,12 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
+//#define HAS_SERIAL
+
+#ifdef HAS_SERIAL
+#include <usart_serial.h>
+#endif
+
 TinyI2CMaster::TinyI2CMaster() {}
 
 #if defined(USIDR)
@@ -203,19 +209,19 @@ that provide a TWI peripheral: ATtiny48/88.
 */
 
 // 400kHz clock
-uint32_t const F_TWI_NORMAL = 400000L; // Hardware I2C clock in Hz
+uint32_t const F_TWI_NORMAL = 40000L; // Hardware I2C clock in Hz
 
 // Choose for 1MHz clock
 uint32_t const F_TWI_FAST = 1000000L;                                // Hardware
 // I2C clock in Hz
 
-uint8_t const TWSR_MTX_DATA_ACK = 0x28;
-uint8_t const TWSR_MTX_ADR_ACK = 0x18;
-uint8_t const TWSR_MRX_ADR_ACK = 0x40;
-uint8_t const TWSR_START = 0x08;
-uint8_t const TWSR_REP_START = 0x10;
-uint8_t const I2C_READ = 1;
-uint8_t const I2C_WRITE = 0;
+const uint8_t TWSR_MTX_DATA_ACK = 0x28;
+const uint8_t TWSR_MTX_ADR_ACK = 0x18;
+const uint8_t TWSR_MRX_ADR_ACK = 0x40;
+const uint8_t TWSR_START = 0x08;
+const uint8_t TWSR_REP_START = 0x10;
+const uint8_t I2C_READ = 1;
+const uint8_t I2C_WRITE = 0;
 
 void TinyI2CMaster::init(bool fast) {
   // activate pull up
@@ -250,8 +256,16 @@ uint8_t TinyI2CMaster::read(void) {
   if (I2Ccount != 0)
     I2Ccount--;
   TWCR = 1 << TWINT | 1 << TWEN | ((I2Ccount == 0) ? 0 : (1 << TWEA));
-  while (!(TWCR & 1 << TWINT))
-    ;
+
+  uint16_t max = 1500;
+  while (!(TWCR & 1 << TWINT) && max--);
+
+  if (max == 0) {
+  #ifdef HAS_SERIAL
+    USART_WriteString("TinyI2CMaster::read error 1\n");
+  #endif
+  }
+
   return TWDR;
 }
 
@@ -263,8 +277,15 @@ uint8_t TinyI2CMaster::readLast(void) {
 bool TinyI2CMaster::write(uint8_t data) {
   TWDR = data;
   TWCR = 1 << TWINT | 1 << TWEN;
-  while (!(TWCR & 1 << TWINT))
-    ;
+  uint16_t max = 15000;
+  while (!(TWCR & 1 << TWINT) && max--);
+
+  if (max == 0) {
+  #ifdef HAS_SERIAL
+    USART_WriteString("TinyI2CMaster::write error 1\n");
+  #endif
+  }
+
   return (TWSR & 0xF8) == TWSR_MTX_DATA_ACK;
 }
 
@@ -279,14 +300,38 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
   } // Read
   uint8_t addressRW = address << 1 | read;
   TWCR = 1 << TWINT | 1 << TWSTA | 1 << TWEN; // Send START condition
-  while (!(TWCR & 1 << TWINT))
-    ;
-  if ((TWSR & 0xF8) != TWSR_START && (TWSR & 0xF8) != TWSR_REP_START)
+  
+  uint16_t max = 1500;
+
+  while (!(TWCR & 1 << TWINT) && max--);
+
+  if (max == 0) {
+    #ifdef HAS_SERIAL
+    USART_WriteString("TinyI2CMaster::start error 1\n");
+    #endif
     return false;
+  }
+
+  if ((TWSR & 0xF8) != TWSR_START && (TWSR & 0xF8) != TWSR_REP_START) {
+    #ifdef HAS_SERIAL
+    USART_WriteString("TinyI2CMaster::start error 2\n");
+    #endif
+    return false;
+  }
+
   TWDR = addressRW; // Send device address and direction
   TWCR = 1 << TWINT | 1 << TWEN;
-  while (!(TWCR & 1 << TWINT))
-    ;
+
+  max = 1500;
+  while (!(TWCR & 1 << TWINT) && max--);
+
+  if (max == 0) {
+    #ifdef HAS_SERIAL
+    USART_WriteString("TinyI2CMaster::start error 3\n");
+    #endif
+    return false;
+  }
+
   if (addressRW & I2C_READ)
     return (TWSR & 0xF8) == TWSR_MRX_ADR_ACK;
   else
@@ -299,104 +344,15 @@ bool TinyI2CMaster::restart(uint8_t address, uint8_t readcount) {
 
 void TinyI2CMaster::stop(void) {
   TWCR = 1 << TWINT | 1 << TWEN | 1 << TWSTO;
-  while (TWCR & 1 << TWSTO)
-    ; // wait until stop and bus released
-}
 
-#elif defined(DXCORE) || defined(MEGATINYCORE) || defined(MEGACOREX)
-/* *********************************************************************************************************************
+  uint16_t max = 1500;
+  while ((TWCR & 1 << TWSTO) && max--); // wait until stop and bus released
 
-   Minimal Tiny I2C Routines for the new 0-series and 1-series ATtiny and ATmega
-microcontrollers, such as the ATtiny402 or ATmega4809, and the AVR Dx series
-microcontrollers, such as the AVR128DA48 and AVR32DB28.
-
-*********************************************************************************************************************
-*/
-
-// 400kHz clock
-uint32_t const FREQUENCY = 400000L; // Hardware I2C clock in Hz
-uint32_t const T_RISE = 300L;       // Rise time
-
-// Choose these for 1MHz clock
-// uint32_t const FREQUENCY = 1000000L;                            // Hardware
-// I2C clock in Hz uint32_t const T_RISE = 120L; // Rise time
-
-void TinyI2CMaster::init() {
-#if !defined(DXCORE)
-  pinMode(PIN_WIRE_SDA, INPUT_PULLUP); // Pullups on unless AVR DA/DB
-  pinMode(PIN_WIRE_SCL, INPUT_PULLUP);
-#endif
-  uint32_t baud =
-      ((F_CPU / FREQUENCY) - (((F_CPU * T_RISE) / 1000) / 1000) / 1000 - 10) /
-      2;
-  TWI0.MBAUD = (uint8_t)baud;
-  TWI0.MCTRLA = TWI_ENABLE_bm; // Enable as master, no interrupts
-  TWI0.MSTATUS = TWI_BUSSTATE_IDLE_gc;
-}
-
-uint8_t TinyI2CMaster::read(void) {
-  if (I2Ccount != 0)
-    I2Ccount--;
-  while (!(TWI0.MSTATUS & TWI_RIF_bm))
-    ; // Wait for read interrupt flag
-  uint8_t data = TWI0.MDATA;
-  // Check slave sent ACK?
-  if (I2Ccount != 0)
-    TWI0.MCTRLB = TWI_MCMD_RECVTRANS_gc; // ACK = more bytes to read
-  else
-    TWI0.MCTRLB = TWI_ACKACT_NACK_gc; // Send NAK
-  return data;
-}
-
-uint8_t TinyI2CMaster::readLast(void) {
-  I2Ccount = 0;
-  return TinyI2CMaster::read();
-}
-
-bool TinyI2CMaster::write(uint8_t data) {
-  TWI0.MCTRLB = TWI_MCMD_RECVTRANS_gc; // Prime transaction
-  TWI0.MDATA = data;                   // Send data
-  while (!(TWI0.MSTATUS & TWI_WIF_bm))
-    ; // Wait for write to complete
-  if (TWI0.MSTATUS & (TWI_ARBLOST_bm | TWI_BUSERR_bm))
-    return false;                        // Fails if bus error or arblost
-  return !(TWI0.MSTATUS & TWI_RXACK_bm); // Returns true if slave gave an ACK
-}
-
-// Start transmission by sending address
-bool TinyI2CMaster::start(uint8_t address, int32_t readcount) {
-  bool read;
-  if (readcount == 0)
-    read = 0; // Write
-  else {
-    I2Ccount = readcount;
-    read = 1;
-  }                                 // Read
-  TWI0.MADDR = address << 1 | read; // Send START condition
-  while (!(TWI0.MSTATUS & (TWI_WIF_bm | TWI_RIF_bm)))
-    ;                                  // Wait for write or read interrupt flag
-  if (TWI0.MSTATUS & TWI_ARBLOST_bm) { // Arbitration lost or bus error
-    while (!(TWI0.MSTATUS & TWI_BUSSTATE_IDLE_gc))
-      ; // Wait for bus to return to idle state
-    return false;
-  } else if (TWI0.MSTATUS &
-             TWI_RXACK_bm) {         // Address not acknowledged by client
-    TWI0.MCTRLB |= TWI_MCMD_STOP_gc; // Send stop condition
-    while (!(TWI0.MSTATUS & TWI_BUSSTATE_IDLE_gc))
-      ; // Wait for bus to return to idle state
-    return false;
+  if (max == 0) {
+    #ifdef HAS_SERIAL
+    USART_WriteString("TinyI2CMaster::stop error 1\n");
+    #endif
   }
-  return true; // Return true if slave gave an ACK
-}
-
-bool TinyI2CMaster::restart(uint8_t address, int32_t readcount) {
-  return TinyI2CMaster::start(address, readcount);
-}
-
-void TinyI2CMaster::stop(void) {
-  TWI0.MCTRLB |= TWI_MCMD_STOP_gc; // Send STOP
-  while (!(TWI0.MSTATUS & TWI_BUSSTATE_IDLE_gc))
-    ; // Wait for bus to return to idle state
 }
 
 #else
