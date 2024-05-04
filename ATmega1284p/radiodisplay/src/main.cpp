@@ -12,6 +12,11 @@
 #include "SPIManager.h"
 #include <gpio.h>
 #include <SSD1306Display.h>
+#include "BME280.h"
+#include "TinyI2CMaster.h"
+
+
+#define HAS_DISPLAY
 
 const uint8_t ON_LED_PIN = 0;
 const uint8_t RADIO_COM_LED_PIN = 1;
@@ -20,7 +25,7 @@ const uint8_t RADIO_CE_PIN = 2;
 
 SSD1306Display display(128, 32);
 SPIManager spi;
-NRF24Manager radio;
+NRF24Manager radio(1);
 
 // init MCU
 void setup() {
@@ -46,16 +51,36 @@ void setup() {
 
   // init SPI bus to control NRF24
   spi.startMaster();
+  // init I2C bus
+  TinyI2C.init();
 
   // init NRF24
   _delay_ms(100); // give some time to NRF24 module to start
-  radio.init(&spi, RADIO_CE_PIN, 0);
+  radio.init(&spi, RADIO_CE_PIN);
 
+#ifdef HAS_DISPLAY
   // init OLED display
   display.init(0x20);
-  display.flip(SSD1306_OFF);
+  display.flip(SSD1306_ON);
   display.drawScreen(0x00);
   display.drawPString(0, SSD1306_LINE0, PSTR("ATmega1284P"));
+#endif
+
+  // init weather sensor
+  bool ok = BME280_begin();
+  if (!ok) {
+    USART_WriteString("BME280 init failed.\n");
+  } else {
+    USART_WriteString("BME280 model: ");
+    uint8_t model = BME280_chipModel();
+    if (model == ChipModel_BME280) {
+      USART_WriteString("BME280\n");
+    } else if (model == ChipModel_BMP280) {
+      USART_WriteString("BMP280\n");
+    } else {
+      USART_WriteString("UNKNOWN\n");
+    }
+  }
 
   // ready to enter main loop
   USART_WriteString("ATmega1284P Ready\n");
@@ -64,11 +89,65 @@ void setup() {
 }
 
 void sendMsg(const char* msg) {
+  #ifdef HAS_DISPLAY
   display.clearPage(3);
   display.drawString(0, SSD1306_LINE3, "SND:");
   display.drawString(26, SSD1306_LINE3, msg);
+  #endif
+
   GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
   radio.send(msg);
+  radio.listen();
+  GPIO_SET_LOW(A, RADIO_COM_LED_PIN);
+}
+
+void getWeather() {
+  char weatherinfo[16];
+
+  int32_t pressure = 0;
+  int32_t temperature = 0;
+  uint16_t humidity = 0;
+  BME280_read(pressure, temperature, humidity);
+  
+  ltoa(temperature/100, weatherinfo, 10);
+  strcat(weatherinfo, "C ");
+  ltoa(pressure/100, weatherinfo+strlen(weatherinfo), 10);
+  strcat(weatherinfo, " hPa ");
+  ltoa(humidity/100, weatherinfo+strlen(weatherinfo), 10);
+  strcat(weatherinfo, "%");
+
+  USART_WriteString("\n");
+  USART_WriteString(weatherinfo);
+  USART_WriteString("\n");
+
+  #ifdef HAS_DISPLAY
+  display.clearPage(0);
+  display.drawString(10, SSD1306_LINE0, weatherinfo);
+
+  display.clearPage(3);
+  uint8_t pos = display.drawInt(10, SSD1306_LINE3, temperature/100, 10);
+  USART_WriteInt(pos);
+  USART_WriteString(" ");
+  pos = display.drawString(pos, SSD1306_LINE3, "C ");
+  USART_WriteInt(pos);
+  USART_WriteString(" ");
+  pos = display.drawInt(pos, SSD1306_LINE3, pressure/100, 10);
+  USART_WriteInt(pos);
+  USART_WriteString(" ");
+  pos = display.drawString(pos, SSD1306_LINE3, " hPa ");
+  USART_WriteInt(pos);
+  USART_WriteString(" ");
+  pos = display.drawInt(pos, SSD1306_LINE3, humidity/100, 10);
+  USART_WriteInt(pos);
+  USART_WriteString(" ");
+  pos = display.drawString(pos, SSD1306_LINE3, "%");
+  USART_WriteInt(pos);
+  USART_WriteString(" ");
+
+  #endif
+
+  GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
+  radio.send(weatherinfo);
   radio.listen();
   GPIO_SET_LOW(A, RADIO_COM_LED_PIN);
 }
@@ -76,9 +155,12 @@ void sendMsg(const char* msg) {
 void execCommand(const char* cmd) {
   // check if command is defined
   if (cmd == NULL || strlen(cmd) ==0) return;
+
+  #ifdef HAS_DISPLAY
   display.clearPage(1);
   display.drawString(0, SSD1306_LINE1, "EXE:");
   display.drawString(26, SSD1306_LINE1, cmd);
+  #endif
   // USART_WriteString("Exec command: ");
   // USART_WriteString(cmd);
   // USART_WriteString("\n\n");
@@ -86,10 +168,14 @@ void execCommand(const char* cmd) {
     radio.summary();
     //chuk.initialize();
     //chuk.display();
+  } else if (strcmp(cmd, "bme280") == 0) {
+    getWeather();
   } else if (strcmp(cmd, "info") == 0) {
     radio.info();
   } else if (strcmp(cmd, "reset") == 0) {
-    radio.reset();
+    radio.reset(0);
+  } else if (strcmp(cmd, "auto") == 0) {
+    radio.reset(1);
   } else if (strcmp(cmd, "on") == 0) {
     radio.changeState(NRF24_POWERUP);
     radio.listen();
@@ -100,12 +186,35 @@ void execCommand(const char* cmd) {
   }
 }
 
+void execRemoteCommand(const char* cmd) {
+  // check if command is defined
+  if (cmd == NULL || strlen(cmd) ==0) return;
+
+  // USART_WriteString("Exec remote command: ");
+  // USART_WriteString(cmd);
+  // USART_WriteString("\n\n");
+  if (strcmp(cmd, "bme280") == 0) {
+    getWeather();
+  } else if (strcmp(cmd, "info") == 0) {
+    radio.info();
+  } else if (strcmp(cmd, "reset") == 0) {
+    radio.reset(0);
+  } else if (strcmp(cmd, "auto") == 0) {
+    radio.reset(1);
+  } else if (strcmp(cmd, "on") == 0) {
+    radio.changeState(NRF24_POWERUP);
+    radio.listen();
+  } else if (strcmp(cmd, "off") == 0) {
+    radio.changeState(NRF24_POWERDOWN);
+  }
+}
+
 const uint16_t PERIOD_MS = 15000;
 uint32_t prevTime = 0;
 uint8_t count = 0;
 
 static char number[5];
-
+uint32_t nbmsg = 0;
 char ping[7] = "pingXX";
 
 void loop() {
@@ -119,18 +228,26 @@ void loop() {
     // get current time
     const char* msg = radio.read_message();
     if (msg && strlen(msg) > 0) {
+      nbmsg++;
+      ultoa(nbmsg, number, 10);
+      
       USART_WriteString("now ");
       USART_WriteUInt(now/1000);
       USART_WriteString("s: ");
       USART_WriteString(msg);
       
-      if (strncmp(msg, "pong", 4) == 0) {
+      execRemoteCommand(msg);
+      /*if (strncmp(msg, "pong", 4) == 0) {
         display.drawString(90, SSD1306_LINE3, msg);
       } else {
+        */
+        #ifdef HAS_DISPLAY
+        
         display.clearPage(2);
         display.drawString(0, SSD1306_LINE2, "REC:");
         display.drawString(26, SSD1306_LINE2, msg);
-      }
+        #endif
+      /*}
 
       if (strncmp(msg, "ping", 4) == 0) {
         USART_WriteString(" => send pong");
@@ -139,6 +256,7 @@ void loop() {
         radio.send("pong");
         radio.listen();
       }
+      */
       USART_WriteString("\n");
     }
   }
@@ -151,7 +269,7 @@ void loop() {
     } else {
       ping[5] = '\0';
     }
-    sendMsg(ping);
+    //sendMsg(ping);
     count++;
     prevTime = now;
   }

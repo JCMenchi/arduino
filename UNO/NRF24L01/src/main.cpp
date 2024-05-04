@@ -14,7 +14,9 @@
 const uint8_t RADIO_CE_PIN = 1;
 
 SPIManager spi;
-NRF24Manager radio;
+NRF24Manager radio(1);
+
+bool loopmsg = false;
 
 void setup() {
   // init serial com
@@ -25,7 +27,7 @@ void setup() {
 
   // init NRF24
   _delay_ms(100); // give some time to NRF24 module to start
-  radio.init(&spi, RADIO_CE_PIN, 0);
+  radio.init(&spi, RADIO_CE_PIN);
 
   // ready to enter main loop
   USART_WriteString("UNO Ready\n");
@@ -45,7 +47,13 @@ void execCommand(const char* cmd) {
   } else if (strcmp(cmd, "info") == 0) {
     radio.info();
   } else if (strcmp(cmd, "reset") == 0) {
-    radio.reset();
+    radio.reset(0);
+  } else if (strcmp(cmd, "auto") == 0) {
+    radio.reset(1);
+  } else if (strcmp(cmd, "loop") == 0) {
+    loopmsg = true;
+  } else if (strcmp(cmd, "noloop") == 0) {
+    loopmsg = false;
   } else if (strcmp(cmd, "on") == 0) {
     radio.changeState(NRF24_POWERUP);
     radio.listen();
@@ -58,7 +66,7 @@ void execCommand(const char* cmd) {
   }
 }
 
-const uint16_t PERIOD_MS = 5000;
+const uint16_t PERIOD_MS = 2000;
 uint32_t prevTime = 0;
 uint8_t count = 0;
 
@@ -87,7 +95,7 @@ void loop() {
     USART_WriteString("\n");   
   }
 
-  if (now - prevTime > PERIOD_MS) {
+  if (now - prevTime > PERIOD_MS && loopmsg) {
     ultoa(count, number, 16);
     ping[4] = number[0];
     if (count > 15) {
@@ -101,7 +109,7 @@ void loop() {
     USART_WriteString("s '");
     USART_WriteString(ping);
     USART_WriteString("'\n");
-    // time to ping
+    //time to ping
     radio.send(ping);
     radio.listen();
     count++;
