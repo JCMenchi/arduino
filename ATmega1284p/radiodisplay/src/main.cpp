@@ -122,28 +122,7 @@ void getWeather() {
 
   #ifdef HAS_DISPLAY
   display.clearPage(0);
-  display.drawString(10, SSD1306_LINE0, weatherinfo);
-
-  display.clearPage(3);
-  uint8_t pos = display.drawInt(10, SSD1306_LINE3, temperature/100, 10);
-  USART_WriteInt(pos);
-  USART_WriteString(" ");
-  pos = display.drawString(pos, SSD1306_LINE3, "C ");
-  USART_WriteInt(pos);
-  USART_WriteString(" ");
-  pos = display.drawInt(pos, SSD1306_LINE3, pressure/100, 10);
-  USART_WriteInt(pos);
-  USART_WriteString(" ");
-  pos = display.drawString(pos, SSD1306_LINE3, " hPa ");
-  USART_WriteInt(pos);
-  USART_WriteString(" ");
-  pos = display.drawInt(pos, SSD1306_LINE3, humidity/100, 10);
-  USART_WriteInt(pos);
-  USART_WriteString(" ");
-  pos = display.drawString(pos, SSD1306_LINE3, "%");
-  USART_WriteInt(pos);
-  USART_WriteString(" ");
-
+  display.drawString(3, SSD1306_LINE0, weatherinfo);
   #endif
 
   GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
@@ -209,15 +188,10 @@ void execRemoteCommand(const char* cmd) {
   }
 }
 
-const uint16_t PERIOD_MS = 15000;
-uint32_t prevTime = 0;
-uint8_t count = 0;
-
-static char number[5];
 uint32_t nbmsg = 0;
-char ping[7] = "pingXX";
 
 void loop() {
+  // get current time
   uint32_t now = milliseconds();
 
   if (SerialCommandMgr::hasCommand()) {
@@ -225,53 +199,50 @@ void loop() {
   }
 
   if (radio.dataAvailable()) {
-    // get current time
-    const char* msg = radio.read_message();
-    if (msg && strlen(msg) > 0) {
+    uint8_t msgsize = 0;
+    uint8_t* msg = radio.read_binary_message(msgsize);
+    USART_WriteString("now ");
+    USART_WriteUInt(now/1000);
+    USART_WriteString("s: ");
+    USART_WriteUInt(msgsize);
+
+    if (msgsize >= 9) {
       nbmsg++;
-      ultoa(nbmsg, number, 10);
-      
-      USART_WriteString("now ");
-      USART_WriteUInt(now/1000);
-      USART_WriteString("s: ");
-      USART_WriteString(msg);
-      
-      execRemoteCommand(msg);
-      /*if (strncmp(msg, "pong", 4) == 0) {
-        display.drawString(90, SSD1306_LINE3, msg);
-      } else {
-        */
-        #ifdef HAS_DISPLAY
-        
-        display.clearPage(2);
-        display.drawString(0, SSD1306_LINE2, "REC:");
-        display.drawString(26, SSD1306_LINE2, msg);
-        #endif
-      /*}
+      uint8_t datasize = msg[0];
+      USART_WriteString(" ");
+      USART_WriteUInt(datasize);
+      USART_WriteString(" pos: ");
+      USART_WriteChar(msg[1]);
 
-      if (strncmp(msg, "ping", 4) == 0) {
-        USART_WriteString(" => send pong");
-        const char* counter = msg+4;
-        display.drawString(100, SSD1306_LINE2,counter);
-        radio.send("pong");
-        radio.listen();
-      }
-      */
-      USART_WriteString("\n");
-    }
-  }
+      int16_t x = 0;
+      int16_t y = 0;
+      int16_t z = 0;
+      memcpy(&x, msg + 2, 2);
+      memcpy(&y, msg + 4, 2);
+      memcpy(&z, msg + 6, 2);
 
-  if (now - prevTime > PERIOD_MS) {
-    ultoa(count, number, 16);
-    ping[4] = number[0];
-    if (count > 15) {
-      ping[5] = number[1];
+      USART_WriteString(" orientation: ");
+      USART_WriteInt(x);
+      USART_WriteString(", ");
+      USART_WriteInt(y);
+      USART_WriteString(", ");
+      USART_WriteInt(z);
+      
+
+      #ifdef HAS_DISPLAY
+      display.clearPage(2);
+      display.drawString(0, SSD1306_LINE2, "REC:");
+      display.drawChar(26, SSD1306_LINE2, msg[1]);
+      display.drawInt(38, SSD1306_LINE2, x, 10);
+      display.drawInt(68, SSD1306_LINE2, y, 10);
+      display.drawInt(100, SSD1306_LINE2, z, 10);
+      #endif
+
     } else {
-      ping[5] = '\0';
+      USART_WriteString((char*)msg);
     }
-    //sendMsg(ping);
-    count++;
-    prevTime = now;
+    USART_WriteString("\n");
+
   }
 
 }
