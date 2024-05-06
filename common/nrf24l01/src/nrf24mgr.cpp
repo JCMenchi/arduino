@@ -379,8 +379,8 @@ void NRF24Manager::ack() {
 
 const char *NRF24Manager::read_message() {
   // Message placeholder
-  static char rx_message[32];
-  memset(rx_message, 0, 32);
+  static char rx_message[NRF24_MAX_MESSAGE_SIZE];
+  memset(rx_message, 0, NRF24_MAX_MESSAGE_SIZE);
 
   // Write ACK message TODO: refactor
   // this->ack();
@@ -398,6 +398,28 @@ const char *NRF24Manager::read_message() {
 
   // Check if there is response message in array
   if (strlen(rx_message) > 0) {
+    return rx_message;
+  }
+
+  return NULL;
+}
+
+uint8_t* NRF24Manager::read_binary_message(uint8_t& length) {
+  // Message placeholder
+  static uint8_t rx_message[NRF24_MAX_MESSAGE_SIZE];
+
+  // Get length of incoming message
+  this->readRegister(NRF24CMD_R_RX_PL_WID, &length, 1);
+
+  // Read message
+  if (length > 0)
+    this->send_spi(NRF24CMD_R_RX_PAYLOAD, rx_message, length);
+  // Clear RX interrupt
+  uint8_t data = (1 << STATUS_REG_RX_DR);
+  this->writeRegister(STATUS_REG, &data, 1);
+
+  // Check if there is response message in array
+  if (length > 0) {
     return rx_message;
   }
 
@@ -451,6 +473,38 @@ uint8_t NRF24Manager::send(const char *msg) {
 
   // Continue listening
   // nrf24_start_listening();
+
+  return 1;
+}
+
+uint8_t NRF24Manager::send_binary(uint8_t *msg, uint8_t length) {
+  // Transmit mode
+  this->celow(); // stop receive mode
+  this->changeState(NRF24_TRANSMIT);
+
+  // Flush TX/RX and clear TX interrupt
+  this->writeRegister(NRF24CMD_FLUSH_RX, 0, 0);
+  this->writeRegister(NRF24CMD_FLUSH_TX, 0, 0);
+
+  // Start SPI, load message into TX_PAYLOAD
+  this->_spi->begin();
+  this->_spi->send(NRF24CMD_W_TX_PAYLOAD);
+  while (length--)
+    this->_spi->send(*(uint8_t *)msg++);
+  this->_spi->end();
+
+  // Send message by pulling CE high for more than 10us
+  this->cehigh();
+  _delay_us(15); // up to 4 ms
+  this->celow();
+
+  if (!this->_autoack) {
+    uint8_t data = 0;
+    // Wait for message to be sent (TX_DS flag raised)
+    this->readRegister(STATUS_REG, &data, 1);
+    while (!(data & (1 << STATUS_REG_TX_DS)))
+      this->readRegister(STATUS_REG, &data, 1);
+  }
 
   return 1;
 }
@@ -512,11 +566,12 @@ void NRF24Manager::reset(uint8_t autoack) {
   this->writeRegister(FEATURE_REG, &cmd, 1);
 }
 
-#ifdef HAS_SERIAL
+
 //-------------------------------------------------------------------------------------
 // Print register information for debug
-
+#ifdef HAS_SERIAL
 void NRF24Manager::info() {
+
   uint8_t buffer[5];
   this->summary();
 

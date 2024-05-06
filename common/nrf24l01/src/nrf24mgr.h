@@ -13,6 +13,9 @@
 #define NRF24_STANDBY1 5
 #define NRF24_STANDBY2 6
 
+
+#define NRF24_MAX_MESSAGE_SIZE 32
+
 class SPIManager;
 
 class NRF24Manager {
@@ -28,7 +31,9 @@ public:
   uint8_t dataAvailable();
 
   const char *read_message();
+  uint8_t* read_binary_message(uint8_t& length);
   uint8_t send(const char *msg);
+  uint8_t send_binary(uint8_t *msg, uint8_t length);
 
   void summary();
   void info();

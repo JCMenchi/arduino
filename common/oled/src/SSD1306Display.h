@@ -75,6 +75,7 @@ public:
   uint8_t updatePageColumn(uint8_t pattern, uint8_t mode, uint8_t mask = 0xFF);
 
   uint8_t drawInt(uint8_t x, uint8_t y, int32_t i, uint8_t base);
+  uint8_t drawChar(uint8_t x, uint8_t y, char c);
   uint8_t drawString(uint8_t x, uint8_t y, const char *pText);
   uint8_t drawPString(uint8_t x, uint8_t y, const char *pText);
 

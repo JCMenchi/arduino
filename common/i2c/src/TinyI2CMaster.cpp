@@ -25,7 +25,7 @@ TinyI2CMaster::TinyI2CMaster() {}
 /* *********************************************************************************************************************
 
    Minimal Tiny I2C Routines for original ATtiny chips that support I2C using a
-USI peripheral, such as ATtiny85.
+USI peripheral, such as ATtiny45.
 
 *********************************************************************************************************************
 */
@@ -200,10 +200,8 @@ void TinyI2CMaster::stop(void) {
 
 /* *********************************************************************************************************************
 
-   Minimal Tiny I2C Routines for most of the original ATmega processors, such as
-the ATmega328P used in the Arduino Uno, ATmega32U4, ATmega2560 used in the
-Arduino Mega 2560, and the ATmega1284P, plus a few unusual ATtiny processors
-that provide a TWI peripheral: ATtiny48/88.
+   Minimal Tiny I2C Routines for ATmega processors with TWI support, such as
+the ATmega328P used in the Arduino Uno, and the ATmega8535, ATmega1284P.
 
 *********************************************************************************************************************
 */

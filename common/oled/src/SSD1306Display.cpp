@@ -630,6 +630,13 @@ uint8_t SSD1306Display::drawInt(uint8_t x, uint8_t y, int32_t i, uint8_t base) {
   return drawString(x, y, numberbuffer);
 }
 
+uint8_t SSD1306Display::drawChar(uint8_t x, uint8_t y, char c) {
+  char str[2];
+  str[0] = c;
+  str[1] = '\0';
+  return drawString(x, y, str);
+}
+
 uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
   if (y + FONT_CHAR_HEIGHT > this->_height) {
     return x;
