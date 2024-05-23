@@ -206,13 +206,20 @@ void loop() {
     USART_WriteString("s: ");
     USART_WriteUInt(msgsize);
 
-    if (msgsize >= 9) {
+    if (msgsize >= 10) {
       nbmsg++;
       uint8_t datasize = msg[0];
       USART_WriteString(" ");
       USART_WriteUInt(datasize);
       USART_WriteString(" pos: ");
       USART_WriteChar(msg[1]);
+      USART_WriteString(" s: ");
+      USART_WriteInt(msg[8]);
+      USART_WriteString(" (");
+      USART_WriteInt(msg[9]);
+      USART_WriteString(", ");
+      USART_WriteInt(msg[10]);
+      USART_WriteString(")");
 
       int16_t x = 0;
       int16_t y = 0;
@@ -227,7 +234,6 @@ void loop() {
       USART_WriteInt(y);
       USART_WriteString(", ");
       USART_WriteInt(z);
-      
 
       #ifdef HAS_DISPLAY
       display.clearPage(2);

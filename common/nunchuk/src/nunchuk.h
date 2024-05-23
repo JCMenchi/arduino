@@ -36,6 +36,8 @@ public:
   inline uint8_t joystick_x() const { return _buffer[0]; }
   inline uint8_t joystick_y() const { return _buffer[1]; }
 
+  uint8_t joystick_strength();
+
   inline float x_g() const {
     return ((float)x_acceleration() - (float)_ax_0g) * _ax_res;
   }

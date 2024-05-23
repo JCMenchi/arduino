@@ -198,6 +198,13 @@ bool Nunchuk::get_calibration() {
   return true;
 }
 
+uint8_t Nunchuk::joystick_strength() {
+  int16_t dx = joystick_x() - _jx_center;
+  int16_t dy = joystick_y() - _jy_center;
+
+  return (uint8_t)(sqrt((dx*dx+dy*dy)/10000.0f) * 255); // max radius is around 100
+}
+
 void Nunchuk::display_calibration() {
   #ifdef HAS_SERIAL
   USART_WriteString("Nunchuk calibration:\n");

@@ -67,8 +67,21 @@ void show_joystick_position(uint32_t now, Nunchuk &nunchuk) {
   USART_WriteString("\n");
   display.drawChar(0, SSD1306_LINE1, nunchuk.get_joystick_position());
 
-  display.drawInt(10, SSD1306_LINE1, nunchuk.joystick_x(), 10);
-  display.drawInt(50, SSD1306_LINE1, nunchuk.joystick_y(), 10);
+  uint8_t pos = 10;
+  if (nunchuk.joystick_x() < 10) {
+    pos = display.drawString(10, SSD1306_LINE1, "  ");
+  } else if (nunchuk.joystick_x() < 100) {
+    pos = display.drawString(10, SSD1306_LINE1, " ");
+  }
+  display.drawInt(pos, SSD1306_LINE1, nunchuk.joystick_x(), 10);
+
+  pos = 50;
+  if (nunchuk.joystick_y() < 10) {
+    pos = display.drawString(10, SSD1306_LINE1, "  ");
+  } else if (nunchuk.joystick_y() < 100) {
+    pos = display.drawString(10, SSD1306_LINE1, " ");
+  }
+  display.drawInt(pos, SSD1306_LINE1, nunchuk.joystick_y(), 10);
 }
 
 void show_nunchuk_orientation(uint32_t now, Nunchuk &nunchuk) {
@@ -98,7 +111,7 @@ void radio_message(uint32_t now, NRF24Manager &radio) {
 void send_to_remote(uint32_t now, NRF24Manager& radio, Nunchuk& nunchuk) {
   uint8_t data[NRF24_MAX_MESSAGE_SIZE];
 
-  data[0] = 1 + 1 + 3 * 2; // message size
+  data[0] = 1 + 1 + 3 * 2 + 1 + 2; // message size
   
   data[1] = nunchuk.get_joystick_position();
 
@@ -109,8 +122,11 @@ void send_to_remote(uint32_t now, NRF24Manager& radio, Nunchuk& nunchuk) {
   memcpy(data + 2, &x, 2);
   memcpy(data + 4, &y, 2);
   memcpy(data + 6, &z, 2);
+  data[8] = nunchuk.joystick_strength();
+  data[9] = nunchuk.joystick_x();
+  data[10] = nunchuk.joystick_y();
 
-  radio.send_binary(data, 9);
+  radio.send_binary(data, 11);
   radio.listen();
 }
 
@@ -156,7 +172,7 @@ void loop() {
 
   if (changed) {
     show_joystick_position(now, nunchuk);
-  } 
+  }
 }
 
 #include <main.cpp.h>
