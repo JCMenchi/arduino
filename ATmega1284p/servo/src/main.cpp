@@ -1,20 +1,21 @@
 #include "usart_serial.h"
-#include <stddef.h>
-#include <util/delay.h>
 #include <avr/io.h>
+#include <avr/pgmspace.h>
 #include <avr/wdt.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <avr/pgmspace.h>
+#include <util/delay.h>
 
-#include "millisec.h"
-#include "nrf24mgr.h"
-#include "SPIManager.h"
-#include "gpio.h"
-#include <SSD1306Display.h>
 #include "BME280.h"
+#include "SPIManager.h"
 #include "TinyI2CMaster.h"
+#include "gpio.h"
+#include "millisec.h"
+#include "motor.h"
+#include "nrf24mgr.h"
 #include "pwm.h"
+#include <SSD1306Display.h>
 
 #define HAS_DISPLAY
 
@@ -23,21 +24,46 @@ const uint8_t RADIO_COM_LED_PIN = 1;
 
 const uint8_t RADIO_CE_PIN = 2;
 
+const uint8_t HALF_BRIDGE_1A = 3;
+const uint8_t HALF_BRIDGE_2A = 2;
+MotorPortA rightMotor(PWM_OC2A, HALF_BRIDGE_1A, HALF_BRIDGE_2A);
+
+const uint8_t HALF_BRIDGE_3A = 5;
+const uint8_t HALF_BRIDGE_4A = 4;
+MotorPortA leftMotor(PWM_OC2A, HALF_BRIDGE_4A, HALF_BRIDGE_3A);
+
+const uint8_t ROBOT_UP_PIN = 6;
+const uint8_t ROBOT_DOWN_PIN = 7;
+
+#define ROBOT_LED_PORT C
+const uint8_t ROBOT_LED_PIN = 7;
+
+uint8_t goingUp = 0;
+uint8_t goingDown = 0;
+
 SSD1306Display display(128, 32);
 SPIManager spi;
 NRF24Manager radio(1);
 
 // init MCU
 void setup() {
+  //--------------------------------------------
+  // Init motor driver
+  //--------------------------------------------
+  // setup OC2A (PD7) for PWM
+  rightMotor.init();
 
-  // setup OC1A (PD5) for PWM
-  enableServoPWM(PWM_OC1A);
-  setServoPWM(PWM_OC1A, 3);
+  //--------------------------------------------
+  // init robot LED
+  GPIO_OUTPUT(ROBOT_LED_PORT, ROBOT_LED_PIN);
+  GPIO_SET_HIGH(ROBOT_LED_PORT, ROBOT_LED_PIN);
 
-  enableServoPWM(PWM_OC2A);
-  setServoPWM(PWM_OC2A, 3);
+  GPIO_INPUT(A, ROBOT_UP_PIN);
+  GPIO_INPUT_PULLUP(A, ROBOT_UP_PIN);
+  GPIO_INPUT(A, ROBOT_DOWN_PIN);
+  GPIO_INPUT_PULLUP(A, ROBOT_DOWN_PIN);
 
-
+  //--------------------------------------------
   // init debug LED
   GPIO_OUTPUT(A, ON_LED_PIN);
   GPIO_OUTPUT(A, RADIO_COM_LED_PIN);
@@ -94,14 +120,24 @@ void setup() {
   USART_WriteString("ATmega1284P Ready\n");
 
   radio.summary();
+
+  GPIO_SET_LOW(ROBOT_LED_PORT, ROBOT_LED_PIN);
+
+  uint8_t isUp = !GPIO_READ(A, ROBOT_UP_PIN);
+  uint8_t isDown = !GPIO_READ(A, ROBOT_DOWN_PIN);
+  USART_WriteString("UP: ");
+  USART_WriteInt(isUp);
+  USART_WriteString(" DOWN: ");
+  USART_WriteInt(isDown);
+  USART_WriteString("\n");
 }
 
-void sendMsg(const char* msg) {
-  #ifdef HAS_DISPLAY
+void sendMsg(const char *msg) {
+#ifdef HAS_DISPLAY
   display.clearPage(3);
   display.drawString(0, SSD1306_LINE3, "SND:");
   display.drawString(26, SSD1306_LINE3, msg);
-  #endif
+#endif
 
   GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
   radio.send(msg);
@@ -116,22 +152,22 @@ void getWeather() {
   int32_t temperature = 0;
   uint16_t humidity = 0;
   BME280_read(pressure, temperature, humidity);
-  
-  ltoa(temperature/100, weatherinfo, 10);
+
+  ltoa(temperature / 100, weatherinfo, 10);
   strcat(weatherinfo, "C ");
-  ltoa(pressure/100, weatherinfo+strlen(weatherinfo), 10);
+  ltoa(pressure / 100, weatherinfo + strlen(weatherinfo), 10);
   strcat(weatherinfo, " hPa ");
-  ltoa(humidity/100, weatherinfo+strlen(weatherinfo), 10);
+  ltoa(humidity / 100, weatherinfo + strlen(weatherinfo), 10);
   strcat(weatherinfo, "%");
 
   USART_WriteString("\n");
   USART_WriteString(weatherinfo);
   USART_WriteString("\n");
 
-  #ifdef HAS_DISPLAY
+#ifdef HAS_DISPLAY
   display.clearPage(0);
   display.drawString(3, SSD1306_LINE0, weatherinfo);
-  #endif
+#endif
 
   GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
   radio.send(weatherinfo);
@@ -141,22 +177,30 @@ void getWeather() {
 
 uint16_t servoPos = 12;
 
-void execCommand(const char* cmd) {
+void execCommand(const char *cmd) {
   // check if command is defined
-  if (cmd == NULL || strlen(cmd) ==0) return;
+  if (cmd == NULL || strlen(cmd) == 0)
+    return;
 
-  #ifdef HAS_DISPLAY
+#ifdef HAS_DISPLAY
   display.clearPage(1);
   display.drawString(0, SSD1306_LINE1, "EXE:");
   display.drawString(26, SSD1306_LINE1, cmd);
-  #endif
+#endif
   // USART_WriteString("Exec command: ");
   // USART_WriteString(cmd);
   // USART_WriteString("\n\n");
   if (strcmp(cmd, "status") == 0) {
     radio.summary();
-    //chuk.initialize();
-    //chuk.display();
+    // chuk.initialize();
+    // chuk.display();
+    uint8_t isUp = !GPIO_READ(A, ROBOT_UP_PIN);
+    uint8_t isDown = !GPIO_READ(A, ROBOT_DOWN_PIN);
+    USART_WriteString("UP: ");
+    USART_WriteInt(isUp);
+    USART_WriteString(" DOWN: ");
+    USART_WriteInt(isDown);
+    USART_WriteString("\n");
   } else if (strcmp(cmd, "bme280") == 0) {
     getWeather();
   } else if (strcmp(cmd, "info") == 0) {
@@ -170,7 +214,26 @@ void execCommand(const char* cmd) {
     radio.listen();
   } else if (strcmp(cmd, "off") == 0) {
     radio.changeState(NRF24_POWERDOWN);
-  
+  } else if (strncmp(cmd, "mfow", 4) == 0 || strncmp(cmd, "mdown", 5) == 0) {
+    uint8_t v = 255;
+    if (strlen(cmd) > 5) {
+      v = atoi(cmd + 4);
+    }
+    goingUp = 0;
+    goingDown = 1;
+    GPIO_SET_HIGH(ROBOT_LED_PORT, ROBOT_LED_PIN);
+    rightMotor.forward(v);
+  } else if (strncmp(cmd, "mrev", 4) == 0 || strncmp(cmd, "mup", 3) == 0) {
+    uint8_t v = 255;
+    if (strlen(cmd) > 5) {
+      v = atoi(cmd + 4);
+    }
+    GPIO_SET_HIGH(ROBOT_LED_PORT, ROBOT_LED_PIN);
+    goingUp = 1;
+    goingDown = 0;
+    rightMotor.reverse(v);
+  } else if (strcmp(cmd, "mstop") == 0) {
+    rightMotor.stop();
   } else if (strcmp(cmd, "1") == 0) {
     setServoPWM(PWM_OC1A, 1);
   } else if (strcmp(cmd, "2") == 0) {
@@ -198,17 +261,18 @@ void execCommand(const char* cmd) {
     setServoPWM(PWM_OC2A, servoPos);
     setServoPWM(PWM_OC1A, servoPos);
   } else if (cmd[0] == 'p') {
-    servoPos = atoi(cmd+1);
-    //setServoPWM(PWM_OC2A, servoPos);
+    servoPos = atoi(cmd + 1);
+    // setServoPWM(PWM_OC2A, servoPos);
     setServoPWM(PWM_OC1A, servoPos);
   } else if (strlen(cmd) > 0) {
     sendMsg(cmd);
   }
 }
 
-void execRemoteCommand(const char* cmd) {
+void execRemoteCommand(const char *cmd) {
   // check if command is defined
-  if (cmd == NULL || strlen(cmd) ==0) return;
+  if (cmd == NULL || strlen(cmd) == 0)
+    return;
 
   // USART_WriteString("Exec remote command: ");
   // USART_WriteString(cmd);
@@ -235,19 +299,35 @@ void loop() {
   // get current time
   uint32_t now = milliseconds();
 
+  uint8_t isUp = !GPIO_READ(A, ROBOT_UP_PIN);
+  uint8_t isDown = !GPIO_READ(A, ROBOT_DOWN_PIN);
+
+  if ((isUp && goingUp) || (isDown && goingDown)) {
+    // USART_WriteString("UP: ");
+    // USART_WriteInt(isUp);
+    // USART_WriteString(" DOWN: ");
+    // USART_WriteInt(isDown);
+    // USART_WriteString("\n");
+    goingUp = 0;
+    goingDown = 0;
+    GPIO_SET_LOW(ROBOT_LED_PORT, ROBOT_LED_PIN);
+    rightMotor.stop();
+  }
+
   if (SerialCommandMgr::hasCommand()) {
     execCommand(SerialCommandMgr::command());
   }
 
   if (radio.dataAvailable()) {
     uint8_t msgsize = 0;
-    uint8_t* msg = radio.read_binary_message(msgsize);
-    USART_WriteString("now ");
-    USART_WriteUInt(now/1000);
-    USART_WriteString("s: ");
-    USART_WriteUInt(msgsize);
+    uint8_t *msg = radio.read_binary_message(msgsize);
 
     if (msgsize >= 10) {
+      USART_WriteString("now ");
+      USART_WriteUInt(now / 1000);
+      USART_WriteString("s: ");
+      USART_WriteUInt(msgsize);
+
       nbmsg++;
       uint8_t datasize = msg[0];
       USART_WriteString(" ");
@@ -256,7 +336,7 @@ void loop() {
       USART_WriteChar(msg[1]);
       USART_WriteString(" s: ");
       USART_WriteInt(msg[8]);
-      setServoPWM(PWM_OC1A, msg[8]*10);
+      setServoPWM(PWM_OC1A, msg[8] * 10);
       USART_WriteString(" (");
       USART_WriteInt(msg[9]);
       USART_WriteString(", ");
@@ -277,22 +357,21 @@ void loop() {
       USART_WriteString(", ");
       USART_WriteInt(z);
 
-      #ifdef HAS_DISPLAY
+#ifdef HAS_DISPLAY
       display.clearPage(2);
       display.drawString(0, SSD1306_LINE2, "REC:");
       display.drawChar(26, SSD1306_LINE2, msg[1]);
       display.drawInt(38, SSD1306_LINE2, x, 10);
       display.drawInt(68, SSD1306_LINE2, y, 10);
       display.drawInt(100, SSD1306_LINE2, z, 10);
-      #endif
+#endif
+      USART_WriteString("\n");
 
     } else {
-      USART_WriteString((char*)msg);
+      // USART_WriteString((char*)msg);
+      // USART_WriteString("\n");
     }
-    USART_WriteString("\n");
-
   }
-
 }
 
 #include <main.cpp.h>
