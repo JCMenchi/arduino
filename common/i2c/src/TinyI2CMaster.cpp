@@ -210,7 +210,7 @@ the ATmega328P used in the Arduino Uno, and the ATmega8535, ATmega1284P.
 uint32_t const F_TWI_NORMAL = 40000L; // Hardware I2C clock in Hz
 
 // Choose for 1MHz clock
-uint32_t const F_TWI_FAST = 1000000L;                                // Hardware
+uint32_t const F_TWI_FAST = 100000L;                                // Hardware
 // I2C clock in Hz
 
 const uint8_t TWSR_MTX_DATA_ACK = 0x28;
