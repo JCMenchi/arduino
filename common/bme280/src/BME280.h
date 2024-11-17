@@ -1,5 +1,5 @@
-#ifndef TG_BME_280_H
-#define TG_BME_280_H
+#ifndef _BME_280_H
+#define _BME_280_H
 
 #include <stdint.h>
 
@@ -26,4 +26,4 @@ void BME280_read(int32_t &pressure, int32_t &temperature, uint16_t &humidity);
 
 uint8_t BME280_chipModel();
 
-#endif // TG_BME_280_H
+#endif

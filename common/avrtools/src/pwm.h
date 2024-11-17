@@ -1,3 +1,6 @@
+#ifndef _AVRTOOLS_PWM_H
+#define _AVRTOOLS_PWM_H
+
 #include <avr/io.h>
 #include <stdint.h>
 
@@ -30,3 +33,5 @@ void setPWM(uint8_t pwm_pin, uint8_t value);
 
 void enableServoPWM(uint8_t pwm_pin);
 void setServoPWM(uint8_t pwm_pin, uint16_t value);
+
+#endif

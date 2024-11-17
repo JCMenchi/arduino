@@ -1,5 +1,5 @@
-#ifndef _MILLISEC_H
-#define _MILLISEC_H
+#ifndef _AVRTOOLS_MILLISEC_H
+#define _AVRTOOLS_MILLISEC_H
 
 #include <stdint.h>
 

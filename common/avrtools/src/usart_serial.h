@@ -1,5 +1,5 @@
-#ifndef _USART_SERIAL_H
-#define _USART_SERIAL_H
+#ifndef _AVRTOOLS_USART_SERIAL_H
+#define _AVRTOOLS_USART_SERIAL_H
 
 #include <stddef.h>
 #include <stdint.h>

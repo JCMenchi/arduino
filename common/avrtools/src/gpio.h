@@ -1,5 +1,5 @@
-#ifndef _GPIO_H
-#define _GPIO_H
+#ifndef _AVRTOOLS_GPIO_H
+#define _AVRTOOLS_GPIO_H
 
 #include <avr/io.h>
 
