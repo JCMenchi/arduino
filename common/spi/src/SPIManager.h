@@ -8,7 +8,7 @@ const uint8_t SPI_WAIT_MASTER = 2;
 const uint8_t SPI_WAIT_COMMAND = 3;
 const uint8_t SPI_WAIT_DATA = 4;
 
-#define SPI_MODE_MASK 0x03          // 0000 0011
+#define SPI_MODE_MASK 0x03  // 0000 0011
 #define SPI_MODE_MASTER 0x03
 #define SPI_MODE_SLAVE 0x01
 
@@ -16,7 +16,7 @@ const uint8_t SPI_WAIT_DATA = 4;
 #define SPI_COMMAND_SIZE_MASK 0x1F  // 0001 1111
 
 class SPIManager {
-public:
+   public:
     SPIManager() : _state(SPI_INIT), _statusRegister(0) {}
 
     uint8_t getState() const { return this->_state; }
@@ -26,7 +26,7 @@ public:
     void startSlave();
     bool isSlave() const { return ((this->_statusRegister & SPI_MODE_MASK) == SPI_MODE_SLAVE); }
     bool receiveCommand(uint8_t& command);
-    bool execCommand(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffer);
+    bool execCommand(uint8_t size, uint8_t* outbuffer, uint8_t* inbuffer);
 
     void startMaster();
     bool isMaster() const { return ((this->_statusRegister & SPI_MODE_MASK) == SPI_MODE_MASTER); }
@@ -35,7 +35,7 @@ public:
     bool send(uint8_t data);
     bool sendData(uint8_t size, uint8_t* inbuffer);
     bool sendCommand(uint8_t& command);
-    bool sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffer);
+    bool sendCommandData(uint8_t size, uint8_t* outbuffer, uint8_t* inbuffer);
     bool sendCommandData(uint8_t size, uint8_t* inoutbuffer);
 
     // method used for using MOSI as input for ST7735 TFT displays
@@ -44,11 +44,9 @@ public:
     void dummyClock();
     uint8_t readFromMosi();
 
-private:
+   private:
     uint8_t _state;
     volatile uint8_t _statusRegister;
 };
-
-
 
 #endif /* __TINY_SPI_H__ */
