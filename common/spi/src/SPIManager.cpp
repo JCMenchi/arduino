@@ -97,17 +97,27 @@ void SPIManager::startMaster() {
     DDR_SPI &= ~(_BV(DD_MISO)); // input
     DDR_SPI |= (_BV(DD_MOSI) | _BV(DD_SCK) | _BV(DD_CS)); // output
 
-    SPCR = (0 << SPIE) | // no interrupt
-           (1 << SPE)  | // enable SPI
-           (0 << DORD) | // MSB first
-           (1 << MSTR) | // set as master
-           (0 << CPOL) | (0 << CPHA) | // mode 0
-           (1 << SPR1) | (1 << SPR0); // CPU freq / 64
+#ifdef SLOW_SPI
+    SPCR = (0 << SPIE) |                // no interrupt
+           (1 << SPE) |                 // enable SPI
+           (0 << DORD) |                // MSB first
+           (1 << MSTR) |                // set as master
+           (0 << CPOL) | (0 << CPHA) |  // mode 0
+           (1 << SPR1) | (1 << SPR0);   // CPU freq / 64
+#else
+    SPCR = (0 << SPIE) |                // no interrupt
+           (1 << SPE) |                 // enable SPI
+           (0 << DORD) |                // MSB first
+           (1 << MSTR) |                // set as master
+           (0 << CPOL) | (0 << CPHA) |  // mode 0
+           (0 << SPR1) | (0 << SPR0);   // CPU freq / 64
+#endif
 
     SPSR |= _BV(SPI2X);
 
     // init output
-    PORT_SPI &= ~(_BV(DD_MOSI) | _BV(DD_SCK) | _BV(DD_CS));
+    PORT_SPI &= ~(_BV(DD_MOSI) | _BV(DD_SCK));
+    PORT_SPI |= _BV(DD_CS);  // not selected
 
     this->_statusRegister = SPI_MODE_MASTER;
     SPDR = this->_statusRegister;
@@ -138,7 +148,7 @@ bool SPIManager::execCommand(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffe
 
     bool success = true;
 
-    for(uint8_t i =0; i < size; i++) {
+    for(uint8_t i = 0; i < size; i++) {
         // copy output byte
         SPDR = outbuffer[i];
         // Wait for reception complete or CS HIGH
@@ -154,7 +164,7 @@ bool SPIManager::execCommand(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffe
         // copy Data Register
         inbuffer[i] = SPDR;
     }
-    
+
     SPDR = this->_statusRegister;
     return success;
 }
@@ -162,7 +172,9 @@ bool SPIManager::execCommand(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffe
 void SPIManager::begin() {
     // CS low to start transmit
     PORT_SPI &= ~(_BV(DD_CS));
-    _delay_ms(5); 
+#ifdef SLOW_SPI
+    _delay_ms(5);
+#endif
 }
 
 void SPIManager::end() {
@@ -174,9 +186,38 @@ bool SPIManager::send(uint8_t data) {
     if (this->isSlave()) return false; // not used if slave
 
     SPDR = data;
+
+    /*
+     * The following NOP introduces a small delay that can prevent the wait
+     * loop form iterating when running at the maximum speed. This gives
+     * about 10% more speed, even if it seems counter-intuitive. At lower
+     * speeds it is unnoticed.
+     */
+    asm volatile("nop");
     // Wait for send complete
     loop_until_bit_is_set(SPSR, SPIF);
-    
+
+    return true;
+}
+
+bool SPIManager::sendData(uint8_t size, uint8_t *inbuffer) {
+    if (this->isSlave()) return false;  // not used if slave
+
+    for (uint8_t i = 0; i < size; i++) {
+        // copy output byte
+        SPDR = inbuffer[i];
+        /*
+         * The following NOP introduces a small delay that can prevent the wait
+         * loop form iterating when running at the maximum speed. This gives
+         * about 10% more speed, even if it seems counter-intuitive. At lower
+         * speeds it is unnoticed.
+         */
+        asm volatile("nop");
+        // Wait for send complete
+        do {
+        } while (bit_is_clear(SPSR, SPIF));
+    }
+
     return true;
 }
 
@@ -184,9 +225,17 @@ bool SPIManager::sendCommand(uint8_t& command) {
     if (this->isSlave()) return false; // not used if slave
 
     SPDR = command;
+
+    /*
+     * The following NOP introduces a small delay that can prevent the wait
+     * loop form iterating when running at the maximum speed. This gives
+     * about 10% more speed, even if it seems counter-intuitive. At lower
+     * speeds it is unnoticed.
+     */
+    asm volatile("nop");
     // Wait for send complete
     loop_until_bit_is_set(SPSR, SPIF);
-    
+
     // copy Data Register
     command = SPDR;
 
@@ -199,12 +248,20 @@ bool SPIManager::sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inb
     for(uint8_t i =0; i < size; i++) {
         // copy output byte
         SPDR = outbuffer[i];
+
+        /*
+         * The following NOP introduces a small delay that can prevent the wait
+         * loop form iterating when running at the maximum speed. This gives
+         * about 10% more speed, even if it seems counter-intuitive. At lower
+         * speeds it is unnoticed.
+         */
+        asm volatile("nop");
         // Wait for send complete
         do { } while (bit_is_clear(SPSR, SPIF));
         // copy Data Register
         inbuffer[i] = SPDR;
     }
-    
+
     return true;
 }
 
@@ -214,13 +271,61 @@ bool SPIManager::sendCommandData(uint8_t size, uint8_t* inoutbuffer) {
     for(uint8_t i =0; i < size; i++) {
         // copy output byte
         SPDR = inoutbuffer[i];
+
+        /*
+         * The following NOP introduces a small delay that can prevent the wait
+         * loop form iterating when running at the maximum speed. This gives
+         * about 10% more speed, even if it seems counter-intuitive. At lower
+         * speeds it is unnoticed.
+         */
+        asm volatile("nop");
         // Wait for send complete
         do { } while (bit_is_clear(SPSR, SPIF));
         // copy Data Register
         inoutbuffer[i] = SPDR;
     }
-    
+
     return true;
+}
+
+void SPIManager::setMosiAsInput() {
+    SPCR &= ~(_BV(SPE));  // disable hardware SPI
+
+    DDR_SPI &= ~(_BV(DD_MOSI));   // input
+    PORT_SPI &= ~(_BV(DD_MOSI));  // no pullup
+}
+
+void SPIManager::setMosiAsOutput() { startMaster(); }
+
+void SPIManager::dummyClock() {
+    // low to high transition to do one clock cycle
+    PORT_SPI |= _BV(DD_SCK);  // high
+    asm volatile("nop");
+    asm volatile("nop");
+    PORT_SPI &= ~(_BV(DD_SCK));  // low
+}
+
+#include <Arduino.h>
+
+uint8_t SPIManager::readFromMosi() {
+    uint8_t r = 0;
+    for (int8_t i = 0; i < 8; i++) {
+        uint8_t bit = PORT_SPI & _BV(1);
+
+        Serial.print("Read bit(");
+        Serial.print(i);
+        Serial.print(")=");
+        Serial.println(bit);
+
+        r <<= 1;
+        r |= (PORT_SPI >> DD_MOSI) & 0x1;
+        PORT_SPI |= _BV(DD_SCK);  // high
+        asm volatile("nop");
+        asm volatile("nop");
+        PORT_SPI &= ~(_BV(DD_SCK));  // low
+    }
+
+    return r;
 }
 
 #endif
@@ -251,7 +356,7 @@ bool SPIManager::sendCommandData(uint8_t size, uint8_t* inoutbuffer) {
  *  This interrupt handler is only enabled when transferring data
  *  in master mode. It toggles the USI clock pin, i.e. two interrupts
  *  results in one clock period on the clock pin and for the USI counter.
- * 
+ *
  * A is used for counting millisec
  */
 ISR(TIM0_COMPB_vect)
@@ -294,7 +399,7 @@ void spi_master_init()
     USI_DIR_REG |= (1<<USI_DATAOUT_PIN) | (1<<USI_CLOCK_PIN); // Outputs.
     USI_DIR_REG &= ~(1<<USI_DATAIN_PIN);                      // Inputs.
     USI_OUT_REG |= (1<<USI_DATAIN_PIN);                       // Pull-ups.
-    
+
     // Configure USI to 3-wire master mode with overflow interrupt.
     USICR = (1<<USIOIE) | // overflow interrupt
             (1<<USIWM0) | // 3 wire mode

@@ -33,9 +33,16 @@ public:
     void begin();
     void end();
     bool send(uint8_t data);
+    bool sendData(uint8_t size, uint8_t* inbuffer);
     bool sendCommand(uint8_t& command);
     bool sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffer);
     bool sendCommandData(uint8_t size, uint8_t* inoutbuffer);
+
+    // method used for using MOSI as input for ST7735 TFT displays
+    void setMosiAsInput();
+    void setMosiAsOutput();
+    void dummyClock();
+    uint8_t readFromMosi();
 
 private:
     uint8_t _state;
