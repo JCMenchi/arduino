@@ -4,8 +4,6 @@
 
 #include <avr/interrupt.h>
 
-#define HAS_SERIAL
-
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif
@@ -222,7 +220,7 @@ void setServoPWM(uint8_t pwm_pin, uint16_t value) {
     }
 }
 
-#elif defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) 
+#elif defined(__AVR_ATmega8515__) 
 
 void enablePWM(uint8_t pwm_pin) {
 
@@ -298,6 +296,66 @@ void setPWM(uint8_t pwm_pin, uint8_t value) {
         OCR1B = value;
     } else if (pwm_pin == PWM_OC2A) {
         OCR2A = value;
+    }
+}
+
+#elif defined(__AVR_ATmega8535__)
+
+void enablePWM(uint8_t pwm_pin) {
+
+    if (pwm_pin == PWM_OC1A || pwm_pin == PWM_OC1B) {
+        // use PWM, PWM, Phase Correct, 10-bit
+        TCCR1A |= (1<<WGM10 | 1<<WGM11);
+        //TCCR1A &= ~(1<<WGM11);
+        TCCR1B &= ~(1<<WGM13 | 1<<WGM12);
+        
+        // set prescaler /8 =>  8MHz / (2 * 8 * 1024) => 0.5kHz 
+        TCCR1B |= (1<<CS11);
+        TCCR1B &= ~(1<<CS12 | 1<<CS10);
+    } else if (pwm_pin == PWM_OC2) {
+        // use PWM, PWM, Phase Correct, 10-bit
+        TCCR2 |= (1<<WGM20);
+        TCCR2 &= ~(1<<WGM21);
+
+        // set prescaler /8 =>  8MHz / (8 * 510) => 2kHz 
+        TCCR2 |= (1<<CS21);
+        TCCR2 &= ~(1<<CS22 | 1<<CS20);
+    } else {
+        #ifdef HAS_SERIAL
+        USART_WriteString("PWM mode not yet implemented\n");
+        #endif
+    }
+
+    // set corresponding pin as output
+    if (pwm_pin == PWM_OC1A) { // PIN D5
+        // use non-inverting Compare Output mode
+        TCCR1A |= (1<<COM1A1);
+        TCCR1A &= ~(1<<COM1A0);
+
+        GPIO_OUTPUT(D, 5);
+    } else if (pwm_pin == PWM_OC1B) { // PIN D4
+        // use non-inverting Compare Output mode
+        TCCR1A |= (1<<COM1B1);
+        TCCR1A &= ~(1<<COM1B0);
+
+        GPIO_OUTPUT(D, 4);
+    } else if (pwm_pin == PWM_OC2) { // PIN D5
+        // use non-inverting Compare Output mode
+        TCCR2 |= (1<<COM21);
+        TCCR2 &= ~(1<<COM20);
+
+        GPIO_OUTPUT(D, 7);
+    }
+
+}
+
+void setPWM(uint8_t pwm_pin, uint8_t value) {
+    if (pwm_pin == PWM_OC1A) {
+        OCR1A = value;
+    } else if (pwm_pin == PWM_OC1B) {
+        OCR1B = value;
+    } else if (pwm_pin == PWM_OC2) {
+        OCR2 = value;
     }
 }
 

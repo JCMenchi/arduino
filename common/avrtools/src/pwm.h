@@ -13,9 +13,15 @@
 const uint8_t PWM_OC0B = 2; // do not use if SPI is used on ATmega1284P
 #endif
 
-#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) || defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATtiny45__)
+#if defined(__AVR_ATmega8515__) || defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATtiny45__)
 const uint8_t PWM_OC1A = 3;
 const uint8_t PWM_OC1B = 4; // do not use if SPI is used on ATmega328P
+#endif
+
+#if defined(__AVR_ATmega8535__)
+const uint8_t PWM_OC1A = 5;
+const uint8_t PWM_OC1B = 4; 
+const uint8_t PWM_OC2 = 7;
 #endif
 
 #if defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__)
