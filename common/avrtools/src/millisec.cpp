@@ -14,7 +14,7 @@ uint32_t milliseconds() {
 void init_timer() {
   cli();
 
-#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__)
+#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
   TCCR0 = (1 << COM01) | (1 << WGM01);
 
   // set timer 0 prescale factor to 64, so one tick equals 8us

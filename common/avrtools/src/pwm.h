@@ -4,7 +4,7 @@
 #include <avr/io.h>
 #include <stdint.h>
 
-#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__)
+#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
 // const uint8_t PWM_OC0 = 0; // 0A is used for couting millisecond do not use
 #endif
 
@@ -18,7 +18,7 @@ const uint8_t PWM_OC1A = 3;
 const uint8_t PWM_OC1B = 4; // do not use if SPI is used on ATmega328P
 #endif
 
-#if defined(__AVR_ATmega8535__)
+#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
 const uint8_t PWM_OC1A = 5;
 const uint8_t PWM_OC1B = 4; 
 const uint8_t PWM_OC2 = 7;

@@ -230,7 +230,7 @@ void TinyI2CMaster::init(bool fast) {
   PORTC |= (1 << PORTC4) | (1 << PORTC5);
 #elif defined (__AVR_ATmega8515__)
   #error "No TWI for 8515"
-#elif defined (__AVR_ATmega8535__)
+#elif defined (__AVR_ATmega8535__) || defined (__AVR_ATmega16__) || defined (__AVR_ATmega32__)
   // ATMega8535 => SCL = PC0 SDA = PC1
   DDRC &= ~((1 << DDC0)|(1 << DDC1));
   PORTC |= (1 << PORTC0) | (1 << PORTC1);

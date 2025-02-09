@@ -38,7 +38,7 @@ uint8_t USART_GetLastChar() {}
 
 #define _UCSRC UCSRC
 
-#elif defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__)
+#elif defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
 
 #define _UBRRH UBRRH
 #define _UBRRL UBRRL
@@ -106,7 +106,6 @@ uint8_t USART_GetLastChar() {}
 void USART_SetBaudRate(uint8_t baudrate) {
   uint16_t br = 0;
 
-// TODO: this is only for 16MHz clock, need to update for 8MHz
 #if F_CPU == 16000000L
   if (baudrate == BAUD_RATE_9600) {
     br = 103;
@@ -148,7 +147,7 @@ void USART_Init(uint8_t baudrate,
   _UCSRB |= (1 << _RXEN) | (1 << _TXEN) | (1 << _RXCIE);
 
   // Set frame format: 8-bit (UCSZ=011), no parity (UPM=00), 1-stop bit (USBS=0)
-#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__)
+#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
   // URSEL needed because UCSRC shared with UBRRH (see datasheet)
   _UCSRC = (1 << URSEL) | (1 << _UCSZ0) | (1 << _UCSZ1);
 #else
@@ -168,6 +167,8 @@ volatile uint8_t last_char = 0;
 
 #if defined(__AVR_ATmega1284P__)
 ISR(USART0_RX_vect) {
+#elif defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
+ISR(USART_RXC_vect) {
 #else
 ISR(USART_RX_vect) {
 #endif

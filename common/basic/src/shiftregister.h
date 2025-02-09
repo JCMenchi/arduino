@@ -4,12 +4,28 @@
 #include <gpio.h>
 #include <string.h>
 
-#define SHR_LSBFIRST 0
-#define SHR_MSBFIRST 1
 
 #ifndef SHREG_PORTID
 #define SHREG_PORTID A
 #endif
+
+#define SR_Q0 0
+#define SR_Q1 1
+#define SR_Q2 2
+#define SR_Q3 3
+#define SR_Q4 4
+#define SR_Q5 5
+#define SR_Q6 6
+#define SR_Q7 7
+
+#define SR_Q0_MASK 0x01
+#define SR_Q1_MASK 0x02
+#define SR_Q2_MASK 0x04
+#define SR_Q3_MASK 0x08
+#define SR_Q4_MASK 0x10
+#define SR_Q5_MASK 0x20
+#define SR_Q6_MASK 0x40
+#define SR_Q7_MASK 0x80
 
 class ShiftRegisterPort {
    public:
@@ -45,7 +61,7 @@ class ShiftRegisterPort {
     }
 
     void writeRegister(uint8_t val) {
-        uint8_t i;
+        int8_t i;
 
         for (i = 7; i >= 0; i--) {
             if (this->state[i] != 0) {
