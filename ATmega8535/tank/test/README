@@ -13,6 +13,6 @@ More information about PlatformIO Unit Testing:
 
 Run simavr
 
-simavr -g -m atmega328p .pio/build/debug/firmware.elf
+simavr -g -m atmega32 .pio/build/debug/firmware.elf
 
 attach debugger to port 1234
