@@ -55,7 +55,6 @@ class Tank {
 public:
     Tank() : m_speed(minSpeed), shiftreg(DATA_PIN, LATCH_PIN, CLOCK_PIN) {}
 
-
     inline void info() {
         USART_WriteString("Tank is: ");
         if (shiftreg.getState(MOTOR1_ON) == 1 && shiftreg.getState(MOTOR2_ON) == 1) {
@@ -101,7 +100,7 @@ public:
     inline void setup() {
         shiftreg.setup();
         shiftreg.allLow();
-        shiftreg.setMask(0x01);
+        shiftreg.setMask(0x00);
         enablePWM(MOTOR_SPEED_CONTROL);  // PORT D 7
     }
 
@@ -184,7 +183,7 @@ public:
     }
 
     inline void decel() {
-        if (m_speed < minSpeed) {
+        if (m_speed < minSpeed - 10) {
             m_speed = minSpeed;
         } else {
             m_speed -= 10;

@@ -1,28 +1,29 @@
-
-
-#include <SSD1306Display.h>
 #include <avr/io.h>
+#include <stdlib.h>
+#include <string.h>
+#include <util/delay.h>
+#include <avr/pgmspace.h>
+
 #include <gpio.h>
 #include <millisec.h>
 #include <pwm.h>
-#include <shiftregister.h>
-#include <stdlib.h>
-#include <string.h>
 #include <usart_serial.h>
-#include <util/delay.h>
-
-#include "tank.h"
 
 #ifndef LED_PORTID
 #define LED_PORTID A
 #endif
-#include <avr/pgmspace.h>
 #define ON_LED_PIN 0
 
-#define ON_LED SR_Q0
 
+#define BT_RX PIND2  // INT0
+#define BT_TX PIND4
+#include <INT0Serial.h>
+INT0Serial BTSerial(BT_TX);
+
+#include "tank.h"
 Tank tank;
 
+#include <SSD1306Display.h>
 SSD1306Display display(128, 32);
 
 void setup() {
@@ -51,6 +52,9 @@ void setup() {
     display.drawScreen(0x00, false);
     display.drawPString(60, 0, PSTR("ATmega8535"));
     tank.setup();
+
+    // init Bluetooth
+    BTSerial.begin(9600);
 }
 
 #define STATUS_CMD "status"
@@ -91,6 +95,8 @@ void execCommand(uint32_t now, const char *cmd) {
     }
     tank.info();
     tank.display(&display);
+
+    //BTSerial.write('A');
 }
 
 uint8_t on = 0;
@@ -130,15 +136,19 @@ void showState(uint32_t now, uint8_t isOn) {
       display.drawInt(base + 4*5, line, min, 10);
     }
 
-    display.drawString(base + 5*5, line, ":");
+    display.drawString(base + 2 + 5 * 5, line, ":");
 
     if (sec >= 10) {
-      display.drawInt(base + 6*5, line, sec, 10);
+      display.drawInt(base + 2 + 6*5, line, sec, 10);
     } else {
-      display.drawString(base + 6*5, line, "0");
-      display.drawInt(base + 7*5, line, sec, 10);
+      display.drawString(base + 2 + 6*5, line, "0");
+      display.drawInt(base + 2 + 7*5, line, sec, 10);
     }
 }
+
+#define CMD_BUF_SIZE 32
+char cmdBuffer[CMD_BUF_SIZE] = "";
+uint8_t currentBufPos = 0;
 
 void loop() {
     uint32_t now = milliseconds();
@@ -155,6 +165,20 @@ void loop() {
     }
 
     _delay_ms(10);
+
+    if (BTSerial.available()) {
+        memset(cmdBuffer, 0, CMD_BUF_SIZE);
+
+        while(BTSerial.available()) {
+            cmdBuffer[currentBufPos++] = BTSerial.read();
+            if (currentBufPos >= CMD_BUF_SIZE) {
+                currentBufPos = 0;
+            }
+        }
+        currentBufPos = 0;
+        USART_WriteString(cmdBuffer);
+        execCommand(now, cmdBuffer);
+    }
 }
 
 #include <main.cpp.h>
