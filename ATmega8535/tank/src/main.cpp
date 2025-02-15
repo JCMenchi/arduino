@@ -1,24 +1,21 @@
 #include <avr/io.h>
-#include <stdlib.h>
-#include <string.h>
-#include <util/delay.h>
 #include <avr/pgmspace.h>
-
 #include <gpio.h>
 #include <millisec.h>
 #include <pwm.h>
+#include <stdlib.h>
+#include <string.h>
 #include <usart_serial.h>
+#include <util/delay.h>
 
 #ifndef LED_PORTID
 #define LED_PORTID A
 #endif
 #define ON_LED_PIN 0
 
-
-#define BT_RX PIND2  // INT0
+// RX/TX are inverted on bluetooth chip, (cross cable, like a null modem)
 #define BT_TX PIND4
-#include <INT0Serial.h>
-INT0Serial BTSerial(BT_TX);
+#include <int0_serial.h>
 
 #include "tank.h"
 Tank tank;
@@ -41,7 +38,7 @@ void setup() {
     _delay_ms(500);
     GPIO_SET_HIGH(LED_PORTID, ON_LED_PIN);
 
-    // init serial com; only 9600 for ATmega8535 (is it a bug?) 
+    // init serial com; only 9600 for ATmega8535 (is it a bug?)
     USART_Init(BAUD_RATE_9600, SerialCommandMgr::serialInput);
     USART_WritePString(PSTR("ATmega8535 serial com ready\n"));
 
@@ -54,7 +51,7 @@ void setup() {
     tank.setup();
 
     // init Bluetooth
-    BTSerial.begin(9600);
+    INT0_Init(BT_TX, INT0_SerialCommandMgr::serialInput);
 }
 
 #define STATUS_CMD "status"
@@ -68,9 +65,11 @@ void setup() {
 
 void execCommand(uint32_t now, const char *cmd) {
     // check if command is defined
-    if (cmd == NULL || strlen(cmd) == 0)
+    if (cmd == NULL || strlen(cmd) == 0) {
         return;
+    }
 
+    //INT0_WriteString(cmd);
     // USART_WriteString(cmd);
     display.drawPage(2, 0x00);
     display.drawString(0, 16, ">");
@@ -95,8 +94,6 @@ void execCommand(uint32_t now, const char *cmd) {
     }
     tank.info();
     tank.display(&display);
-
-    //BTSerial.write('A');
 }
 
 uint8_t on = 0;
@@ -111,44 +108,51 @@ void showState(uint32_t now, uint8_t isOn) {
     if (isOn == 0) {
         GPIO_SET_LOW(LED_PORTID, ON_LED_PIN);
         // USART_WritePString(PSTR("OFF\n"));
-        //display.drawPage(1, 0x00);
+        // display.drawPage(1, 0x00);
     } else {
         GPIO_SET_HIGH(LED_PORTID, ON_LED_PIN);
         // USART_WritePString(PSTR("ON\n"));
-        //display.drawPage(1, 0x00);
+        // display.drawPage(1, 0x00);
     }
 
     const uint8_t base = 0;
+    const uint8_t width = 6;
     const uint8_t line = 0;
 
     if (hour >= 10) {
-      display.drawInt(base, line, hour, 10);
+        display.drawInt(base, line, hour, 10);
     } else {
-      display.drawString(base, line, "0");
-      display.drawInt(base + 5, line, hour, 10);
+        display.drawString(base, line, "0");
+        display.drawInt(base + width, line, hour, 10);
     }
-    display.drawString(base + 2*5, line, ":");
-    
+    display.drawString(base + 2 * width, line, ":");
+
     if (min >= 10) {
-      display.drawInt(base + 3*5, line, min, 10);
+        display.drawInt(base + 3 * width, line, min, 10);
     } else {
-      display.drawString(base + 3*5, line, "0");
-      display.drawInt(base + 4*5, line, min, 10);
+        display.drawString(base + 3 * width, line, "0");
+        display.drawInt(base + 4 * width, line, min, 10);
     }
 
-    display.drawString(base + 2 + 5 * 5, line, ":");
+    display.drawString(base + 5 * width, line, ":");
 
     if (sec >= 10) {
-      display.drawInt(base + 2 + 6*5, line, sec, 10);
+        display.drawInt(base + 6 * width, line, sec, 10);
     } else {
-      display.drawString(base + 2 + 6*5, line, "0");
-      display.drawInt(base + 2 + 7*5, line, sec, 10);
+        display.drawString(base + 6 * width, line, "0");
+        display.drawInt(base + 7 * width, line, sec, 10);
+    }
+
+    if ((sec % 10) == 0) {
+        INT0_WriteString("Time: ");
+        INT0_WriteUInt(hour);
+        INT0_WriteString(":");
+        INT0_WriteUInt(min);
+        INT0_WriteString(":");
+        INT0_WriteUInt(sec);
+        INT0_WriteChar('\n');
     }
 }
-
-#define CMD_BUF_SIZE 32
-char cmdBuffer[CMD_BUF_SIZE] = "";
-uint8_t currentBufPos = 0;
 
 void loop() {
     uint32_t now = milliseconds();
@@ -164,21 +168,11 @@ void loop() {
         execCommand(now, SerialCommandMgr::command());
     }
 
-    _delay_ms(10);
-
-    if (BTSerial.available()) {
-        memset(cmdBuffer, 0, CMD_BUF_SIZE);
-
-        while(BTSerial.available()) {
-            cmdBuffer[currentBufPos++] = BTSerial.read();
-            if (currentBufPos >= CMD_BUF_SIZE) {
-                currentBufPos = 0;
-            }
-        }
-        currentBufPos = 0;
-        USART_WriteString(cmdBuffer);
-        execCommand(now, cmdBuffer);
+    if (INT0_SerialCommandMgr::hasCommand()) {
+        execCommand(now, INT0_SerialCommandMgr::command());
     }
+
+    _delay_ms(1);
 }
 
 #include <main.cpp.h>

@@ -6,6 +6,7 @@
 #include <shiftregister.h>
 #include <usart_serial.h>
 #include <SSD1306Display.h>
+#include <int0_serial.h>
 
 #ifndef MOTOR1_FORWARD
 #define MOTOR1_FORWARD SR_Q1
@@ -60,20 +61,30 @@ public:
         if (shiftreg.getState(MOTOR1_ON) == 1 && shiftreg.getState(MOTOR2_ON) == 1) {
             if (shiftreg.getState(MOTOR1_FORWARD) == 1 && shiftreg.getState(MOTOR2_FORWARD) == 1) {
                 USART_WriteString("going forward");
+                INT0_WriteChar('F');
             } else if (shiftreg.getState(MOTOR1_REVERSE) == 1 && shiftreg.getState(MOTOR2_REVERSE) == 1) {
                 USART_WriteString("going backward");
+                INT0_WriteChar('B');
             }
         } else if (shiftreg.getState(MOTOR1_ON) == 1 && shiftreg.getState(MOTOR2_ON) == 0) {
             USART_WriteString(" turning left");
+            INT0_WriteChar('L');
         } else if (shiftreg.getState(MOTOR1_ON) == 0 && shiftreg.getState(MOTOR2_ON) == 1) {
             USART_WriteString(" turning right");
+            INT0_WriteChar('R');
         } else {
             USART_WriteString("stopped");
+            INT0_WriteChar('S');
         }
 
         USART_WriteString(", speed: ");
         USART_WriteUInt(m_speed, 10);
+
+        INT0_WriteUInt(m_speed, 10);
+
         USART_WriteString("\n");
+
+        INT0_WriteString("\n");
     }
 
     void display(SSD1306Display *display) {
