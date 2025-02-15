@@ -9,7 +9,8 @@
 #include <string.h>
 #include <util/delay_basic.h>
 
-
+#define COM_LED_PORTID A
+#define COM_LED_PIN 6
 
 #if defined(__AVR_ATtiny45__)
 
@@ -114,6 +115,11 @@ void INT0_Init(uint8_t tpin, volatile void (*INT0_rec_cb)(uint8_t)) {
     // setRX(receivePin);
     GPIO_INPUT_PULLUP(INT0_PORT, INT0_PIN);
 
+#ifdef COM_LED_PORTID
+    GPIO_SET_LOW(COM_LED_PORTID, COM_LED_PIN);
+    GPIO_OUTPUT(COM_LED_PORTID, COM_LED_PIN);
+#endif
+
     // Enable the PCINT for the entire port here, but never disable it
     // (others might also need it, so we disable the interrupt by using
     // the per-pin PCMSK register).
@@ -133,6 +139,10 @@ ISR(INT0_vect) {
     // so interrupt is probably not for us
     uint8_t readBit = GPIO_READ(INT0_PORT, INT0_PIN);
     if (!readBit) {
+        #ifdef COM_LED_PORTID
+        GPIO_SET_HIGH(COM_LED_PORTID, COM_LED_PIN);
+        #endif
+
         // Disable further interrupts during reception, this prevents
         // triggering another interrupt directly after we return, which can
         // cause problems at higher baudrates.
@@ -159,6 +169,10 @@ ISR(INT0_vect) {
 
         // Re-enable interrupts when we're sure to be inside the stop bit
         GICR |= (1 << INT0);
+
+        #ifdef COM_LED_PORTID
+        GPIO_SET_LOW(COM_LED_PORTID, COM_LED_PIN);
+        #endif
     }
 }
 
@@ -166,6 +180,10 @@ uint8_t INT0_Transmit(uint8_t data) {
     if (_tx_delay == 0) {
         return 0;
     }
+
+    #ifdef COM_LED_PORTID
+    GPIO_SET_HIGH(COM_LED_PORTID, COM_LED_PIN);
+    #endif
 
     // By declaring these as local variables, the compiler will put them
     // in registers _before_ disabling interrupts and entering the
@@ -201,6 +219,9 @@ uint8_t INT0_Transmit(uint8_t data) {
     GPIO_SET_HIGH(INT0_PORT, _transmitPin);
 
     SREG = oldSREG;  // turn interrupts back on
+    #ifdef COM_LED_PORTID
+    GPIO_SET_LOW(COM_LED_PORTID, COM_LED_PIN);
+    #endif
     _delay_loop_2(_tx_delay);
 
     return 1;
