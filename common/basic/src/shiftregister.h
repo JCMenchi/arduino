@@ -38,14 +38,13 @@ class ShiftRegisterPort {
     }
 
     void setup() {
+        GPIO_SET_HIGH(SHREG_PORTID, this->latchPin);
+        GPIO_SET_LOW(SHREG_PORTID, this->dataPin);
+        GPIO_SET_HIGH(SHREG_PORTID, this->clockPin);
 
         GPIO_OUTPUT(SHREG_PORTID, this->dataPin);
         GPIO_OUTPUT(SHREG_PORTID, this->latchPin);
         GPIO_OUTPUT(SHREG_PORTID, this->clockPin);
-
-        GPIO_SET_HIGH(SHREG_PORTID, this->latchPin);
-        GPIO_SET_LOW(SHREG_PORTID, this->dataPin);
-        GPIO_SET_HIGH(SHREG_PORTID, this->clockPin);
     }
 
     void toggleBit(uint8_t pos) {

@@ -13,6 +13,9 @@
 #endif
 #define ON_LED_PIN 0
 
+#define WDG_LED_PORTID A
+#define WDG_LED_PIN 5
+
 // RX/TX are inverted on bluetooth chip, (cross cable, like a null modem)
 #define BT_TX PIND4
 #define BT_STATE_PORT B
@@ -30,6 +33,8 @@ SSD1306Display display(128, 32);
 void setup() {
     // init debug LED
     GPIO_OUTPUT(LED_PORTID, ON_LED_PIN);
+
+    GPIO_OUTPUT(WDG_LED_PORTID, WDG_LED_PIN);
 
     // startup blinking of ON LED
     GPIO_SET_HIGH(LED_PORTID, ON_LED_PIN);
@@ -123,6 +128,9 @@ void execCommand(uint32_t now, const char *cmd) {
         tank.decel();
     } else if (cmd[0] == 'W') {
         watchdog = atoi(cmd+1);
+    } else if (cmd[0] == 'H') {
+        tank.shiftregistry()->allHigh();
+        _delay_ms(2000);
     }
     tank.info();
     tank.display(&display);
@@ -220,9 +228,11 @@ void loop() {
         prev = now;
 
         if (watchdog > 1) {
+            GPIO_SET_HIGH(WDG_LED_PORTID, WDG_LED_PIN);
             watchdog--;
         } else if (watchdog == 1) {
             watchdog = 0;
+            GPIO_SET_LOW(WDG_LED_PORTID, WDG_LED_PIN);
             execCommand(now, "S");
         }
     }

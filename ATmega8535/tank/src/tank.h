@@ -8,6 +8,11 @@
 #include <SSD1306Display.h>
 #include <int0_serial.h>
 
+
+#ifndef MOTOR1_DRIVER_ON
+#define MOTOR1_DRIVER_ON SR_Q0
+#endif
+
 #ifndef MOTOR1_FORWARD
 #define MOTOR1_FORWARD SR_Q1
 #endif
@@ -109,10 +114,14 @@ public:
     }
 
     inline void setup() {
+        // initialize
         shiftreg.setup();
         shiftreg.allLow();
-        shiftreg.setMask(0x00);
         enablePWM(MOTOR_SPEED_CONTROL);  // PORT D 7
+
+        // turn led on to shwo we are ready
+        shiftreg.setState(MOTOR1_DRIVER_ON, 1);
+        shiftreg.sendData();
     }
 
     ShiftRegisterPort* shiftregistry() {
