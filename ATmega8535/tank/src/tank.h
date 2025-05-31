@@ -22,15 +22,15 @@
 #endif
 
 #ifndef MOTOR1_ON
-#define MOTOR1_ON SR_Q5
+#define MOTOR1_ON SR_Q3
 #endif
 
 #ifndef MOTOR2_FORWARD
-#define MOTOR2_FORWARD SR_Q3
+#define MOTOR2_FORWARD SR_Q4
 #endif
 
 #ifndef MOTOR2_REVERSE
-#define MOTOR2_REVERSE SR_Q4
+#define MOTOR2_REVERSE SR_Q5
 #endif
 
 #ifndef MOTOR2_ON
@@ -53,6 +53,7 @@
 #define CLOCK_PIN 3  // SH_CP
 #endif
 
+#define TANK_MOVING_MASK (1 << MOTOR1_ON | 1 << MOTOR2_ON)
 
 const uint8_t minSpeed = 150;
 const uint8_t maxSpeed = 255;
@@ -122,6 +123,15 @@ public:
         // turn led on to shwo we are ready
         shiftreg.setState(MOTOR1_DRIVER_ON, 1);
         shiftreg.sendData();
+    }
+
+    bool isMoving() const { 
+        return (shiftreg.getMask() & TANK_MOVING_MASK) != 0;
+    }
+    
+    bool isMovingForward() const { 
+        return (shiftreg.getMask() & TANK_MOVING_MASK) != 0 && 
+               (shiftreg.getState(MOTOR1_FORWARD) == 1 || shiftreg.getState(MOTOR2_FORWARD) == 1);
     }
 
     ShiftRegisterPort* shiftregistry() {

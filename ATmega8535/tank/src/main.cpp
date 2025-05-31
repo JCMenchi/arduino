@@ -30,6 +30,10 @@ Tank tank;
 #include <SSD1306Display.h>
 SSD1306Display display(128, 32);
 
+#include "hcsr04.h"
+HC_SR04 frontradar(4, 5, 20000UL); // Trigger pin 4, Echo pin 5, timeout 20ms
+int16_t distance = -3;
+
 void setup() {
     // init debug LED
     GPIO_OUTPUT(LED_PORTID, ON_LED_PIN);
@@ -60,6 +64,8 @@ void setup() {
     display.drawScreen(0x00, false);
     display.drawPString(60, 0, PSTR("ATmega8535"));
     tank.setup();
+
+    frontradar.setup();
 
     // init Bluetooth
     INT0_Init(BT_TX, INT0_SerialCommandMgr::serialInput);
@@ -131,7 +137,10 @@ void execCommand(uint32_t now, const char *cmd) {
     } else if (cmd[0] == 'H') {
         tank.shiftregistry()->allHigh();
         _delay_ms(2000);
+    } else if (cmd[0] == 'd') {
+        distance = frontradar.read();
     }
+
     tank.info();
     tank.display(&display);
 }
@@ -139,6 +148,8 @@ void execCommand(uint32_t now, const char *cmd) {
 
 
 void showState(uint32_t now, uint8_t isOn) {
+    const uint8_t width = 6;
+
     uint8_t sec = (now / 1000) % 60;
     uint8_t min = ((now / 1000) / 60) % 60;
     uint8_t hour = (((now / 1000) / 60) / 60);
@@ -154,25 +165,46 @@ void showState(uint32_t now, uint8_t isOn) {
     }
 
     if (curBTState == 1) {
-        display.drawString(5, 8, "BT: ON ");
+        display.drawString(5, 8, "BT:ON ");
     } else {
-        display.drawString(5, 8, "BT: OFF");
+        display.drawString(5, 8, "BT:OFF");
+    }
+
+    // display dist to obstacle
+    const uint8_t dist_x = 50;
+    if (distance < 0) {
+        display.drawString(dist_x, 8, "D:N/A      ");
+    } else {
+        display.drawString(dist_x, 8, "D:");
+        if (distance < 10) {
+            display.drawString(dist_x + 2 * width, 8, "  ");
+            display.drawInt(dist_x + 4 * width, 8, distance, 10);
+        } else if (distance < 100) {
+            display.drawString(dist_x + 2 * width, 8, " ");
+            display.drawInt(dist_x + 3 * width, 8, distance, 10);
+        } else {
+            display.drawInt(dist_x + 2 * width, 8, distance, 10);
+        }
+        display.drawString(dist_x + 5 * width, 8, "cm");
     }
 
     const uint8_t base = 0;
-    const uint8_t width = 6;
+
     const uint8_t line = 0;
 
+    // display watchdog
+    const uint8_t wdg_x = 110;
     if (watchdog < 10) {
-        display.drawString(80, 8, "00");
-        display.drawInt(80 + 2*width, 8, watchdog, 10);
+        display.drawString(wdg_x, 8, "00");
+        display.drawInt(wdg_x + 2*width, 8, watchdog, 10);
     } else if (watchdog < 100) {
-        display.drawString(80, 8, "0");
-        display.drawInt(80 + width, 8, watchdog, 10);
+        display.drawString(wdg_x, 8, "0");
+        display.drawInt(wdg_x + width, 8, watchdog, 10);
     } else {
-        display.drawInt(80, 8, watchdog, 10);
+        display.drawInt(wdg_x, 8, watchdog, 10);
     }
 
+    // display time
     if (hour >= 10) {
         display.drawInt(base, line, hour, 10);
     } else {
@@ -222,7 +254,18 @@ void showState(uint32_t now, uint8_t isOn) {
 void loop() {
     uint32_t now = milliseconds();
 
+    // read distance from sensor
+    distance = frontradar.read();
+    if (distance < 12 && tank.isMovingForward()) {
+        // obstacle too close, stop tank
+        tank.stop();
+        tank.display(&display);
+        watchdog = 1;
+    }
+    _delay_ms(30);
+
     if ((now - prev) > 1000) {
+
         on = (on == 0) ? 1 : 0;
         showState(now, on);
         prev = now;
@@ -236,7 +279,6 @@ void loop() {
             execCommand(now, "S");
         }
     }
-
 
     // check BT com
     uint8_t btstate = GPIO_READ(BT_STATE_PORT, BT_STATE_PIN);

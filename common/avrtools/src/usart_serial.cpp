@@ -150,6 +150,11 @@ void USART_Init(uint8_t baudrate,
 #if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
   // URSEL needed because UCSRC shared with UBRRH (see datasheet)
   _UCSRC = (1 << URSEL) | (1 << _UCSZ0) | (1 << _UCSZ1);
+
+  // add pullup on receive line to avoid noise if serial is not connected
+  #if defined(__AVR_ATmega8535__)
+  PORTD |= (1 << PD0); // assuming RXD is on PD0
+  #endif
 #else
   _UCSRC |= (1 << _UCSZ0) | (1 << _UCSZ1);
 #endif
