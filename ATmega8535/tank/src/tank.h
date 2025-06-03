@@ -172,7 +172,7 @@ public:
         shiftreg.setState(MOTOR1_REVERSE, 0);
         shiftreg.setState(MOTOR1_ON, 1);
         shiftreg.setState(MOTOR2_FORWARD, 0);
-        shiftreg.setState(MOTOR2_REVERSE, 0);
+        shiftreg.setState(MOTOR2_REVERSE, 1);
         shiftreg.setState(MOTOR2_ON, 0);
         shiftreg.sendData();
 
@@ -182,7 +182,7 @@ public:
     inline void right() {
         setPWM(MOTOR_SPEED_CONTROL, 0);
         shiftreg.setState(MOTOR1_FORWARD, 0);
-        shiftreg.setState(MOTOR1_REVERSE, 0);
+        shiftreg.setState(MOTOR1_REVERSE, 1);
         shiftreg.setState(MOTOR1_ON, 0);
         shiftreg.setState(MOTOR2_FORWARD, 1);
         shiftreg.setState(MOTOR2_REVERSE, 0);

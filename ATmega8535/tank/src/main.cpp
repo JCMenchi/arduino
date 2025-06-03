@@ -17,6 +17,7 @@
 #define WDG_LED_PIN 5
 
 // RX/TX are inverted on bluetooth chip, (cross cable, like a null modem)
+// Device 88:25:83:F4:FB:53 MLTBT05J
 #define BT_TX PIND4
 #define BT_STATE_PORT B
 #define BT_STATE_PIN 2
@@ -96,6 +97,29 @@ void execATCommand(const char *cmd) {
     }
 }
 
+void sendInfo(uint8_t hour, uint8_t min, uint8_t sec) {
+    INT0_WriteString("Time: ");
+    if (hour < 10) {
+        INT0_WriteChar('0');
+    }
+    INT0_WriteUInt(hour);
+    INT0_WriteString(":");
+    if (min < 10) {
+        INT0_WriteChar('0');
+    }
+    INT0_WriteUInt(min);
+    INT0_WriteString(":");
+    if (sec < 10) {
+        INT0_WriteChar('0');
+    }
+    INT0_WriteUInt(sec);
+    INT0_WriteString(" W");
+    INT0_WriteUInt(watchdog);
+    INT0_WriteString(" D");
+    INT0_WriteInt(distance);
+    INT0_WriteChar('\n');
+}
+
 void execCommand(uint32_t now, const char *cmd) {
     // check if command is defined
     if (cmd == NULL || strlen(cmd) == 0) {
@@ -139,6 +163,10 @@ void execCommand(uint32_t now, const char *cmd) {
         _delay_ms(2000);
     } else if (cmd[0] == 'd') {
         distance = frontradar.read();
+        uint8_t sec = (now / 1000) % 60;
+        uint8_t min = ((now / 1000) / 60) % 60;
+        uint8_t hour = (((now / 1000) / 60) / 60);
+        sendInfo(hour, min, sec);
     }
 
     tank.info();
@@ -172,7 +200,9 @@ void showState(uint32_t now, uint8_t isOn) {
 
     // display dist to obstacle
     const uint8_t dist_x = 50;
-    if (distance < 0) {
+    if (distance == -2) {
+        display.drawString(dist_x, 8, "D:free     ");
+    } else if (distance == -1) {
         display.drawString(dist_x, 8, "D:N/A      ");
     } else {
         display.drawString(dist_x, 8, "D:");
@@ -230,24 +260,7 @@ void showState(uint32_t now, uint8_t isOn) {
     }
 
     if ((sec % 10) == 0) {
-        INT0_WriteString("Time: ");
-        if (hour < 10) {
-            INT0_WriteChar('0');
-        }
-        INT0_WriteUInt(hour);
-        INT0_WriteString(":");
-        if (min < 10) {
-            INT0_WriteChar('0');
-        }
-        INT0_WriteUInt(min);
-        INT0_WriteString(":");
-        if (sec < 10) {
-            INT0_WriteChar('0');
-        }
-        INT0_WriteUInt(sec);
-        INT0_WriteString(" W");
-        INT0_WriteUInt(watchdog);
-        INT0_WriteChar('\n');
+        sendInfo(hour, min, sec);
     }
 }
 
@@ -256,7 +269,7 @@ void loop() {
 
     // read distance from sensor
     distance = frontradar.read();
-    if (distance < 12 && tank.isMovingForward()) {
+    if (distance >= 0 && distance < 12 && tank.isMovingForward()) {
         // obstacle too close, stop tank
         tank.stop();
         tank.display(&display);
