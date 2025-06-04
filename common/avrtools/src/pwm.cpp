@@ -56,7 +56,9 @@ void enablePWM(uint8_t pwm_pin) {
         TCCR2B |= (1<<CS21);
         TCCR2B &= ~(1<<CS22 | 1<<CS20);
     } else {
+        #ifdef HAS_SERIAL
         USART_WriteString("PWM mode not yet implemented\n");
+        #endif
     }
 
     // set corresponding pin as output
@@ -128,7 +130,9 @@ void enableServoPWM(uint8_t pwm_pin) {
         TCCR2B &= ~(1<<CS22);
         TCCR2B |= (1<<CS20 | 1<<CS21);
     } else {
+        #ifdef HAS_SERIAL
         USART_WriteString("PWM mode not yet implemented\n");
+        #endif
     }
 
     // set corresponding pin as output
@@ -190,32 +194,48 @@ void setServoPWM(uint8_t pwm_pin, uint16_t value) {
 
         // value cannot be more than 20ms
         if (value > 20000) {
+            #ifdef HAS_SERIAL
             USART_WriteString("Value ");
             USART_WriteUInt(value);
             USART_WriteString(" too big reset to ");
+            #endif
             value = 20000;
+
+            #ifdef HAS_SERIAL
             USART_WriteUInt(value);
             USART_WriteString("\n");
+            #endif
         }
 
+        #ifdef HAS_SERIAL
         USART_WriteString("Set OC1A to ");
         USART_WriteUInt(value);
         USART_WriteString("\n");
+        #endif
         OCR1A = value;
     } else if (pwm_pin == PWM_OC2A) {
         // value cannot be more than 256
         if (value > 255) {
+            #ifdef HAS_SERIAL
             USART_WriteString("Value ");
             USART_WriteUInt(value);
             USART_WriteString(" too big reset to ");
+            #endif
+
             value = 255;
+
+            #ifdef HAS_SERIAL
             USART_WriteUInt(value);
             USART_WriteString("\n");
+            #endif
         }
 
+        #ifdef HAS_SERIAL
         USART_WriteString("Set OC2A to ");
         USART_WriteUInt(value);
         USART_WriteString("\n");
+        #endif
+        
         OCR2A = value;
     }
 }
