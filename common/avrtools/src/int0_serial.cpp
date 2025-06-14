@@ -9,13 +9,14 @@
 #include <string.h>
 #include <util/delay_basic.h>
 
-#define COM_LED_PORTID A
-#define COM_LED_PIN 6
+
 
 #if defined(__AVR_ATtiny45__)
 
 #define INT0_PORT B
 #define INT0_PIN PINB2
+#define COM_LED_PORTID A
+#define COM_LED_PIN 6
 
 #else
 #if defined(__AVR_ATmega8__)
@@ -24,13 +25,20 @@
 
 #define INT0_PORT D
 #define INT0_PIN PIND2
+#define COM_LED_PORTID A
+#define COM_LED_PIN 6
 
 #elif defined(__AVR_ATmega328P__)
+
+#define INT0_PORT D
+#define INT0_PIN PIND2
 
 #elif defined(__AVR_ATmega1284P__)
 
 #define INT0_PORT D
 #define INT0_PIN PIND2
+#define COM_LED_PORTID A
+#define COM_LED_PIN 6
 
 #endif
 
@@ -128,7 +136,7 @@ void INT0_Init(uint8_t tpin, volatile void (*INT0_rec_cb)(uint8_t)) {
     // the per-pin PCMSK register).
 
     // Global Enable INT0 interrupt
-    #if defined(__AVR_ATmega1284P__)
+    #if defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__)
     EIMSK |= (1 << INT0);
     // interrupt on failing edge
     EIMSK = (1 << ISC01);
@@ -156,7 +164,7 @@ ISR(INT0_vect) {
         // Disable further interrupts during reception, this prevents
         // triggering another interrupt directly after we return, which can
         // cause problems at higher baudrates.
-        #if defined(__AVR_ATmega1284P__)
+        #if defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__)
         EIMSK &= ~(1 << INT0);
         #else
         GICR &= ~(1 << INT0);
@@ -183,7 +191,7 @@ ISR(INT0_vect) {
         _delay_loop_2(_rx_delay_stopbit);
 
         // Re-enable interrupts when we're sure to be inside the stop bit
-        #if defined(__AVR_ATmega1284P__)
+        #if defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__)
         EIMSK |= (1 << INT0);
         #else
         GICR |= (1 << INT0);
