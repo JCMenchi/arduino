@@ -1,15 +1,14 @@
 #include "common.h"
 
-#include <usart_serial.h>
 #include <util/delay.h>
-#include <millisec.h>
-#include <sound.h>
 
+#include <sound.h>
+#include <millisec.h>
+#include <usart_serial.h>
 #include <CH1115Display.h>
 
-unsigned long fps_start_time = 0;
-uint32_t fps_nb_frame = 0;
 
+// Draws the "Game Over" screen with scrolling text effect.
 void drawGameOver(CH1115Display *display) {
   display->drawScreen(0x00, true);
   display->drawString(40, 24, "GAME OVER");
@@ -18,6 +17,7 @@ void drawGameOver(CH1115Display *display) {
   display->scroll(CH1115_SCROLL_CONTINUOUS);
 }
 
+// Draws the start screen with the game title and scrolling "insert coins..." message.
 void drawStart(CH1115Display *display) {
   display->breathingEffect(CH1115_OFF);
   display->drawScreen(0x00, true);
@@ -27,6 +27,7 @@ void drawStart(CH1115Display *display) {
   display->scroll(CH1115_SCROLL_CONTINUOUS);
 }
 
+// Draws the victory screen, applies a breathing effect, waits, then returns to the start screen.
 void drawVictory(CH1115Display *display) {
   display->drawScreen(0x00, true);
   display->drawString(40, 24, "YOU WIN");
@@ -38,13 +39,22 @@ void drawVictory(CH1115Display *display) {
   drawStart(display);
 }
 
+#ifdef SHOW_PERFORMANCE
+unsigned long fps_start_time = 0;
+uint32_t fps_nb_frame = 0;
+#endif
+
+// Draws the main game scene, updates game objects, and optionally prints performance info.
 void drawScene(CH1115Display *display, bool first) {
   unsigned long start = milliseconds();
 
   if (first) {
     start_sound();
+    #ifdef SHOW_PERFORMANCE
+    // init FPS counters
     fps_start_time = 0;
     fps_nb_frame = 0;
+    #endif
     // reset screen effect
     display->scroll(CH1115_SCROLL_OFF);
     // init screen
@@ -60,6 +70,7 @@ void drawScene(CH1115Display *display, bool first) {
   // update alien
   update_alien(display);
 
+  #ifdef SHOW_PERFORMANCE
   // compute FPS end, check drawing time
   unsigned long end = milliseconds();
 
@@ -80,4 +91,5 @@ void drawScene(CH1115Display *display, bool first) {
     USART_WriteInt(end - start);
     USART_WriteString("\n");
   }
+  #endif
 }

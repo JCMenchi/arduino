@@ -1,7 +1,13 @@
-#include <usart_serial.h>
+
+
+#ifndef _HIGHSCORE_H
+#define _HIGHSCORE_H
+
 #include <avr/eeprom.h>
 
-#define INVADERS_TYPE 0xDECA
+#include <usart_serial.h>
+
+const uint16_t INVADERS_TYPE=0xDECA;
 
 const uint8_t UserScore_size = 6;
 
@@ -37,9 +43,9 @@ struct UserScore {
     USART_WriteString("\n");
   }
 };
-UserScore highscore[3];
 
-void initEEPROM() {
+
+void UserScore_initEEPROM(UserScore *highscore, size_t UserScore_size) {
   uint16_t marker = eeprom_read_word((uint16_t *)2);
   if (marker == INVADERS_TYPE) {
     USART_WriteString("EEPROM already initialized.\n");
@@ -59,3 +65,4 @@ void initEEPROM() {
   }
 }
 
+#endif

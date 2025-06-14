@@ -3,7 +3,6 @@
 #include "common.h"
 #include "sound.h"
 
-
 #include <util/atomic.h>
 #include <util/delay.h>
 #include <stdlib.h>
@@ -15,14 +14,15 @@
 
 #include <millisec.h>
 
-#include "score.h"
+#include <highscore.h>
 
 CH1115Display ch1115(SCREEN_WIDTH, SCREEN_HEIGHT);
+UserScore highscore[3];
 
 uint8_t gameOver = 1;
 
-
 char buffer[64];
+
 
 
 bool esccommand(const char *escape_buffer) {
@@ -183,8 +183,8 @@ void setup() {
   USART_WriteString("Welcome.\n");
   serial_buffer_pos = 0;
   
-  // init EEPROM to store high scores
-  initEEPROM();
+  // init high score EEPROM
+  UserScore_initEEPROM(highscore, 3);
 
   // init OLED display
   ch1115.init(0x01);

@@ -2,8 +2,6 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 
-#include <usart_serial.h>
-
 // timerx_toggle_count:
 //  > 0 - duration specified
 //  = 0 - stopped
