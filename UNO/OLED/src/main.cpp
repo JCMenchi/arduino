@@ -3,7 +3,6 @@
 #include "common.h"
 #include "sound.h"
 
-#include <avr/eeprom.h>
 #include <util/atomic.h>
 #include <util/delay.h>
 #include <stdlib.h>
@@ -15,57 +14,16 @@
 
 #include <millisec.h>
 
+#include <highscore.h>
+
 CH1115Display ch1115(SCREEN_WIDTH, SCREEN_HEIGHT);
+UserScore highscore[3];
 
 uint8_t gameOver = 1;
-unsigned long fps_start_time = 0;
-uint32_t fps_nb_frame = 0;
 
 char buffer[64];
 
-void drawScene(CH1115Display *display, bool first) {
-  unsigned long start = milliseconds();
 
-  if (first) {
-    start_sound();
-    fps_start_time = 0;
-    fps_nb_frame = 0;
-    // reset screen effect
-    display->scroll(CH1115_SCROLL_OFF);
-    // init screen
-    move_alien(MOVE_INIT);
-    move_spaceship(MOVE_INIT);
-
-    display->drawScreen(0x00);
-    draw_shelter(&ch1115);
-  }
-
-  // update spaceship
-  update_spaceship(&ch1115);
-  // update alien
-  update_alien(&ch1115);
-
-  // compute FPS end, check drawing time
-  unsigned long end = milliseconds();
-
-  fps_nb_frame++;
-  if (fps_start_time == 0) {
-    fps_start_time = start;
-  } else if ((end - fps_start_time) > 10000) {
-    USART_WriteString("FPS: ");
-    USART_WriteInt(((fps_nb_frame * 1000) / (end - fps_start_time)));
-    USART_WriteString("\n");
-
-    fps_start_time = 0;
-    fps_nb_frame = 0;
-  }
-
-  if ((end - start) > 150) {
-    USART_WriteString("Frame refresh in (ms): ");
-    USART_WriteInt(end - start);
-    USART_WriteString("\n");
-  }
-}
 
 bool esccommand(const char *escape_buffer) {
 
@@ -215,64 +173,6 @@ volatile void SERIAL_CB(uint8_t d, bool error) {
   serial_buffer[serial_buffer_pos] = 0;
 }
 
-#define INVADERS_TYPE 0xDECA
-
-const uint8_t UserScore_size = 6;
-
-struct UserScore {
-  UserScore() : score(0) {
-    user[0] = '_';
-    user[1] = '_';
-    user[2] = '_';
-    user[3] = 0;
-  }
-
-  uint16_t score;
-  char user[4];
-
-  void store(uint16_t offset) {
-    eeprom_update_word((uint16_t *)offset, score);
-    eeprom_update_byte((uint8_t *)(offset + 2), user[0]);
-    eeprom_update_byte((uint8_t *)(offset + 3), user[1]);
-    eeprom_update_byte((uint8_t *)(offset + 4), user[2]);
-    eeprom_update_byte((uint8_t *)(offset + 5), user[3]);
-  }
-
-  void load(uint16_t offset) {
-    score = eeprom_read_word((uint16_t *)offset);
-    eeprom_read_block(&user, (const void *)(offset + 2), 4);
-  }
-
-  void display() {
-    USART_WriteString("User: ");
-    USART_WriteString(user);
-    USART_WriteString(" score: ");
-    USART_WriteInt(score);
-    USART_WriteString("\n");
-  }
-};
-UserScore highscore[3];
-
-void initEEPROM() {
-  uint16_t marker = eeprom_read_word((uint16_t *)2);
-  if (marker == INVADERS_TYPE) {
-    USART_WriteString("EEPROM already initialized.\n");
-    highscore[0].load(4);
-    highscore[1].load(4 + UserScore_size);
-    highscore[2].load(4 + 2 * UserScore_size);
-
-    highscore[0].display();
-    highscore[1].display();
-    highscore[2].display();
-  } else {
-    USART_WriteString("Initialize EEPROM.\n");
-    eeprom_update_word((uint16_t *)2, INVADERS_TYPE);
-    highscore[0].store(4);
-    highscore[1].store(4 + UserScore_size);
-    highscore[2].store(4 + 2 * UserScore_size);
-  }
-}
-
 /*
   Init and main loop
 */
@@ -283,8 +183,8 @@ void setup() {
   USART_WriteString("Welcome.\n");
   serial_buffer_pos = 0;
   
-  // init EEPROM
-  initEEPROM();
+  // init high score EEPROM
+  UserScore_initEEPROM(highscore, 3);
 
   // init OLED display
   ch1115.init(0x01);
