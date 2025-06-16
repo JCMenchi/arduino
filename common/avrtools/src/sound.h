@@ -107,9 +107,17 @@ const uint8_t sound_loop[] = { NOTE_AS2, NOTE_GS2, NOTE_FS2, NOTE_F2 };
 const uint16_t SOUND_LOOP_NOTE_DURATION = 800;
 const uint16_t SOUND_LOOP_NOTE_PAUSE = 200;
 
+#ifndef MUSIC_PORT
 #define MUSIC_PORT PORTB
+#endif
+
+#ifndef MUSIC_DDR
 #define MUSIC_DDR DDRB
-const uint8_t MUSIC_PIN = PORTB0;
+#endif
+
+#ifndef MUSIC_PIN
+#define MUSIC_PIN PORTB0
+#endif
 
 void start_sound();
 

@@ -39,6 +39,8 @@ void drawVictory(CH1115Display *display) {
   drawStart(display);
 }
 
+#define SHOW_PERFORMANCE 1
+
 #ifdef SHOW_PERFORMANCE
 unsigned long fps_start_time = 0;
 uint32_t fps_nb_frame = 0;

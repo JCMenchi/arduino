@@ -2,6 +2,7 @@
 #define __NUNCHUK_H__
 
 #include <stdint.h>
+#include <math.h>
 
 /*
   For details go to http://wiibrew.org/wiki/Wiimote/Extension_Controllers/Nunchuck
