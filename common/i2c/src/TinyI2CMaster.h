@@ -26,6 +26,7 @@ public:
 
 private:
   uint8_t I2Ccount;
+  uint8_t initialised;
   uint8_t transfer(uint8_t data);
 };
 

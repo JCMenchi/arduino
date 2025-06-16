@@ -18,7 +18,7 @@
 #include <usart_serial.h>
 #endif
 
-TinyI2CMaster::TinyI2CMaster() {}
+TinyI2CMaster::TinyI2CMaster() : I2Ccount(0), initialised(false) {}
 
 #if defined(USIDR)
 
@@ -89,6 +89,7 @@ uint8_t TinyI2CMaster::transfer(uint8_t data) {
 }
 
 void TinyI2CMaster::init(bool fast) {
+  if (initialised) return;
   PORT_USI |= 1 << PIN_USI_SDA;    // Enable pullup on SDA.
   PORT_USI_CL |= 1 << PIN_USI_SCL; // Enable pullup on SCL.
 
@@ -103,6 +104,8 @@ void TinyI2CMaster::init(bool fast) {
           0 << USITC;
   USISR = 1 << USISIF | 1 << USIOIF | 1 << USIPF | 1 << USIDC | // Clear flags,
           0x0 << USICNT0; // and reset counter.
+
+  initialised = true; // Set initialised flag
 }
 
 uint8_t TinyI2CMaster::read(void) {
@@ -210,7 +213,7 @@ the ATmega328P used in the Arduino Uno, and the ATmega8535, ATmega1284P.
 uint32_t const F_TWI_NORMAL = 40000L; // Hardware I2C clock in Hz
 
 // Choose for 1MHz clock
-uint32_t const F_TWI_FAST = 100000L;                                // Hardware
+uint32_t const F_TWI_FAST = 400000L;                                // Hardware
 // I2C clock in Hz
 
 const uint8_t TWSR_MTX_DATA_ACK = 0x28;
@@ -222,8 +225,9 @@ const uint8_t I2C_READ = 1;
 const uint8_t I2C_WRITE = 0;
 
 void TinyI2CMaster::init(bool fast) {
+  
+  if (initialised) return;
   // activate pull up
-
 #if defined (__AVR_ATmega328P__)
   // ATMega328P (UNO) => SCL = PC5 SDA = PC4
   DDRC &= ~((1 << DDC4)|(1 << DDC5));
@@ -244,10 +248,12 @@ void TinyI2CMaster::init(bool fast) {
   
   TWSR = 0;                        // No prescaler
   if (fast) {
-    TWBR = (F_CPU / F_TWI_FAST - 16) / 2; // Set bit rate factor
+    TWBR = 0; // Set bit rate factor
   } else {
     TWBR = (F_CPU / F_TWI_NORMAL - 16) / 2; // Set bit rate factor
   }
+
+  initialised = true; // Set initialised flag
 }
 
 uint8_t TinyI2CMaster::read(void) {
