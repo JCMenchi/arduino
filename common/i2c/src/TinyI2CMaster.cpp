@@ -248,12 +248,12 @@ void TinyI2CMaster::init(bool fast) {
   
   TWSR = 0;                        // No prescaler
   if (fast) {
-    TWBR = 0; // Set bit rate factor
+    TWBR = 3; // Set bit rate factor
   } else {
     TWBR = (F_CPU / F_TWI_NORMAL - 16) / 2; // Set bit rate factor
   }
 
-  initialised = true; // Set initialised flag
+  this->initialised = true; // Set initialised flag
 }
 
 uint8_t TinyI2CMaster::read(void) {

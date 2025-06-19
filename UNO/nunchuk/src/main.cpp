@@ -53,9 +53,9 @@ void show_joystick_position(uint32_t now, Nunchuk &nunchuk) {
   USART_WriteUInt(now);
   USART_WriteString(" ");
   USART_WriteChar(nunchuk.get_joystick_position());
-  USART_WriteString(" ");
+  USART_WriteString(" JX:");
   USART_WriteInt(nunchuk.joystick_x());
-  USART_WriteString(" ");
+  USART_WriteString(" JY:");
   USART_WriteInt(nunchuk.joystick_y());
   if (nunchuk.z_button()) {
     USART_WriteString(" Z");
@@ -66,18 +66,18 @@ void show_joystick_position(uint32_t now, Nunchuk &nunchuk) {
   USART_WriteString("\n");
 }
 
-const uint16_t PERIOD_MS = 2000;
+const uint16_t PERIOD_MS = 1000;
 uint32_t prevTime = 0;
 
 void show_nunchuk_orientation(uint32_t now, Nunchuk &nunchuk) {
   USART_WriteUInt(now);
-  USART_WriteString(", ");
+  USART_WriteString(", XT:");
   USART_WriteInt(nunchuk.x_tilt());
-  USART_WriteString(", ");
+  USART_WriteString(", YT");
   USART_WriteInt(nunchuk.y_tilt());
-  USART_WriteString(", ");
+  USART_WriteString(", ZT");
   USART_WriteInt(nunchuk.z_tilt());
-  USART_WriteString(", ");
+  USART_WriteString(", ACC:");
 
   float accSquare = nunchuk.x_g() * nunchuk.x_g() + nunchuk.y_g() * nunchuk.y_g() + nunchuk.z_g() * nunchuk.z_g();
   USART_WriteFloat(accSquare, 5, 2);
@@ -92,15 +92,16 @@ void loop() {
 
   nunchuk.update();
 
-  if (nunchuk.c_button()) {
-    show_nunchuk_orientation(now, nunchuk);
-  } 
-  
-  if (nunchuk.z_button()) {
-    show_joystick_position(now, nunchuk);
-  } 
-  
+  //if (nunchuk.c_button()) {
+  //  show_nunchuk_orientation(now, nunchuk);
+  //} 
+  //
+  //if (nunchuk.z_button()) {
+  //  show_joystick_position(now, nunchuk);
+  //} 
+  //
   if (now - prevTime > PERIOD_MS && loopmsg) {
+    show_joystick_position(now, nunchuk);
     show_nunchuk_orientation(now, nunchuk);
     prevTime = now;
   }

@@ -121,7 +121,7 @@ bool Nunchuk::update() {
   TinyI2C.start(NUNCHUK_I2C_ID, 0);
   TinyI2C.write(WII_POSITION_REGISTER);
   TinyI2C.stop();
-  _delay_ms(1);
+  _delay_us(500);
 
   TinyI2C.start(NUNCHUK_I2C_ID, NUNCHUK_BUFFER_SIZE);
   _buffer[0] = TinyI2C.read();

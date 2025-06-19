@@ -37,6 +37,15 @@ public:
   inline uint8_t joystick_x() const { return _buffer[0]; }
   inline uint8_t joystick_y() const { return _buffer[1]; }
 
+  inline uint8_t joystick_x_min() const { return _jx_min; }
+  inline uint8_t joystick_x_max() const { return _jx_max; }
+  inline uint8_t joystick_x_center() const { return _jx_center; }
+  
+  inline uint8_t joystick_y_min() const { return _jy_min; }
+  inline uint8_t joystick_y_max() const { return _jy_max; }
+  inline uint8_t joystick_y_center() const { return _jy_center; }
+
+
   uint8_t joystick_strength();
 
   inline float x_g() const {
