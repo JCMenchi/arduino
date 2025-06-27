@@ -18,6 +18,8 @@
 #include <avr/interrupt.h>
 
 #include "tinyspi.h"
+#include <gpio.h>
+#include <util/delay.h>
 
 
 /*! \brief  Data input register buffer.
@@ -186,56 +188,21 @@ bool SPIManager::sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inb
 #if defined(USISR)
 
 /* USI port and pin definitions. */
+#if defined(__AVR_ATtiny84__)
+#define USI_OUT_REG	PORTA	//!< USI port output register.
+#define USI_IN_REG	PINA	//!< USI port input register.
+#define USI_DIR_REG	DDRA	//!< USI port direction register.
+#define USI_CLOCK_PIN	PA4//!< USI clock I/O pin.
+#define USI_DATAIN_PIN	PA6	//!< USI data input pin.
+#define USI_DATAOUT_PIN	PA5	//!< USI data output pin.
+#else
 #define USI_OUT_REG	PORTB	//!< USI port output register.
 #define USI_IN_REG	PINB	//!< USI port input register.
 #define USI_DIR_REG	DDRB	//!< USI port direction register.
 #define USI_CLOCK_PIN	PB2	//!< USI clock I/O pin.
 #define USI_DATAIN_PIN	PB0	//!< USI data input pin.
 #define USI_DATAOUT_PIN	PB1	//!< USI data output pin.
-
-
-/*  Speed configuration:
- *  Bits per second = CPUSPEED / PRESCALER / (COMPAREVALUE+1) / 2.
- *  Maximum = CPUSPEED / 64.
- */
-#define TC0_PRESCALER_VALUE 64	//!< Must be 1, 8, 64, 256 or 1024.
-#define TC0_COMPARE_VALUE   1	//!< Must be 0 to 255. Minimum 31 with prescaler CLK/1.
-
-/*! \brief  Timer/Counter 0 B Compare Match Interrupt handler.
- *
- *  This interrupt handler is only enabled when transferring data
- *  in master mode. It toggles the USI clock pin, i.e. two interrupts
- *  results in one clock period on the clock pin and for the USI counter.
- * 
- * A is used for counting millisec
- */
-ISR(TIM0_COMPB_vect)
-{
-    USICR |= (1<<USITC);	// Toggle clock output pin.
-}
-
-/*! \brief  USI Timer Overflow Interrupt handler.
- *
- *  This handler disables the compare match interrupt if in master mode.
- *  When the USI counter overflows, a byte has been transferred, and we
- *  have to stop the timer tick.
- *  For all modes the USIDR contents are stored and flags are updated.
- */
-ISR(USI_OVF_vect)
-{
-    // Master must now disable the compare match interrupt
-    // to prevent more USI counter clocks.
-    if( spiX_status.masterMode == 1 ) {
-        TIMSK &= ~(1<<OCIE0B);
-    }
-
-    // Copy USIDR to buffer to prevent overwrite on next transfer.
-    storedSPIData = USIDR;
-    spiX_status.transferComplete = 1;
-
-    // Update flags and clear USI counter
-    USISR = (1<<USIOIF);
-}
+#endif
 
 /*! \brief  Initialize USI as SPI master.
  *
@@ -248,30 +215,13 @@ void spi_master_init()
     // Configure port directions.
     USI_DIR_REG |= (1<<USI_DATAOUT_PIN) | (1<<USI_CLOCK_PIN); // Outputs.
     USI_DIR_REG &= ~(1<<USI_DATAIN_PIN);                      // Inputs.
-    USI_OUT_REG |= (1<<USI_DATAIN_PIN);                       // Pull-ups.
-    
+
     // Configure USI to 3-wire master mode with overflow interrupt.
-    USICR = (1<<USIOIE) | // overflow interrupt
-            (1<<USIWM0) | // 3 wire mode
-            (1<<USICS1) | (0<<USICS0) | // External, positive edge 
-            (1<<USICLK); // clock by writing USITC
-
-    // Enable 'Clear Timer on Compare match' and init prescaler.
-    // already set in millisec.cpp
-    //     as prescale factor to 64, so one tick equals 4us at 8MHz
-    TCCR0A |= (1 << COM0B1) | (1 << WGM01);
-
-    // set timer 0 prescale factor to 64, so one tick equals 4us
-    TCCR0B |= (1 << CS01) | (1 << CS00);
-
-    // Init Output Compare Register.
-    OCR0B = 1;
-
+    USICR = (1<<USIWM0) | (0<<USIWM1) | // 3 wire mode
+            (1<<USICS1) | (0<<USICS0); // software clock 
+            
     // Init driver status register.
     spiX_status.masterMode       = 1;
-    spiX_status.transferComplete = 0;
-
-    storedSPIData = 0;
 }
 
 /*! \brief  Initialize USI as SPI slave.
@@ -285,9 +235,8 @@ void spi_master_init()
 void spi_slave_init()
 {
     // Configure port directions.
-    USI_DIR_REG |= (1<<USI_DATAOUT_PIN);                      // Outputs.
-    USI_DIR_REG &= ~(1<<USI_DATAIN_PIN) | (1<<USI_CLOCK_PIN); // Inputs.
-    USI_OUT_REG |= (1<<USI_DATAIN_PIN) | (1<<USI_CLOCK_PIN);  // Pull-ups.
+    USI_DIR_REG |= (1<<USI_DATAOUT_PIN) ; // Outputs.
+    USI_DIR_REG &= ~(1<<USI_DATAIN_PIN) ; // Inputs.
 
     // Configure USI to 3-wire slave mode with overflow interrupt.
     USICR = (1<<USIOIE) | (1<<USIWM0) |
@@ -295,96 +244,84 @@ void spi_slave_init()
 
     // Init driver status register.
     spiX_status.masterMode       = 0;
-    spiX_status.transferComplete = 0;
-
-    storedSPIData = 0;
 }
 
-/*! \brief  Put one byte on bus.
-
- *  Use this function like you would write to the SPDR register in the native SPI module.
- *  Calling this function in master mode starts a transfer, while in slave mode, a
- *  byte will be prepared for the next transfer initiated by the master device.
- *  If a transfer is in progress, this function will set the write collision flag
- *  and return without altering the data registers.
- *
- *  \returns  0 if a write collision occurred, 1 otherwise.
- */
 uint8_t spi_send(uint8_t val)
 {
-    // Check if transmission in progress,
-    // i.e. USI counter unequal to zero.
-    if( (USISR & 0x0F) != 0 ) {
-        // Indicate write collision and return.
-        return 0;
-    }
-
-    spiX_status.transferComplete = 0;
-    // Put data in USI data register.
+    // 1. Load the data to be sent into the USI Data Register.
     USIDR = val;
-
+    
     // Master should now enable compare match interrupts.
     if( spiX_status.masterMode == 1 ) {
-        TIFR |= (1<<OCF0B);   // Clear compare match flag.
-        TIMSK |= (1<<OCIE0B); // Enable compare match interrupt.
+        // 2. Clear the USI Counter Overflow Flag to start the transfer.
+        //    This also pre-loads the USI counter.
+        USISR = (1<<USIOIF);
+
+        // 3. Manually clock the USI until the transfer is complete.
+        //    The USIOIF flag will be set by hardware after 8 clock cycles.
+        while((USISR & (1<<USIOIF)) == 0) {
+            // Wait for USI counter to be cleared.
+            USICR |= (1<<USITC); // Toggle clock output pin.
+        }
     }
 
-    return 1;
+    return USIDR;
 }
 
 void spi_bulk_send( uint8_t *send_buffer, uint8_t count )
 {
     while (count--) {
         uint8_t data = *send_buffer++;
-        while (spi_send(data) == 0) {} // try until write is possible
-        spi_wait(); // wait end of write
+        spi_send(data);
     }
-}
-
-uint8_t spi_exchange(uint8_t data) {
-    while (spi_send(data) == 0) {} // try until write is possible
-    spi_wait(); // wait end of write
-    return storedSPIData;
 }
 
 void spi_bulk_exchange(uint8_t *send_buffer, uint8_t *receive_buffer, uint8_t count)
 {
     while ( count-- ) {
         uint8_t data = *send_buffer++;
-        while (spi_send(data) == 0) {} // try until write is possible
-        spi_wait(); // wait end of write
-        *receive_buffer++ = storedSPIData;
+        // Send data and receive response.
+        *receive_buffer++ = spi_send(data);
     }
 }
 
-/*! \brief  Get one byte from bus.
- *
- *  This function only returns the previous stored USIDR value.
- *  The transfer complete flag is not checked. Use this function
- *  like you would read from the SPDR register in the native SPI module.
- */
-uint8_t spi_get()
-{
-    if (spiX_status.masterMode == 0) {
-        spiX_status.transferComplete = 0;
-    }
-    return storedSPIData;
+void SPIManager::begin(uint8_t cspin) {
+    // pull low for chip select
+    GPIO_SET_LOW(A, cspin);
 }
 
-/*! \brief  Wait for transfer to complete.
- *
- *  This function waits until the transfer complete flag is set.
- *  Use this function like you would wait for the native SPI interrupt flag.
- */
-void spi_wait()
-{
-    // Check if transmission in progress,
-    // i.e. USI counter unequal to zero.
-    do {} while( spiX_status.transferComplete == 0);
+void SPIManager::end(uint8_t cspin) {
+    GPIO_SET_HIGH(A, cspin);
 }
 
-uint8_t spi_data_available() {
-    return spiX_status.transferComplete;
+void SPIManager::startMaster() {
+    this->_statusRegister = SPI_MODE_MASTER;
+    spi_master_init();
+}
+
+void SPIManager::startSlave() {
+    this->_statusRegister = SPI_MODE_SLAVE;
+    spi_slave_init();
+}
+
+bool SPIManager::sendCommand(uint8_t& command) {
+    command = spi_send(command);
+    return true;
+}
+
+bool SPIManager::send(uint8_t data) {
+    spi_send(data);
+    return true;
+}
+
+bool SPIManager::sendCommandData(uint8_t size, uint8_t* inoutbuffer) {
+    spi_bulk_exchange(inoutbuffer, inoutbuffer, size);
+    return true;
 }
 
 #endif
+
+/*
+
+
+*/

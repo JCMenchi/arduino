@@ -51,6 +51,14 @@ USI peripheral, such as ATtiny45.
 #define DDR_USI_CL DDRB
 #define PORT_USI PORTB
 #define PORT_USI_CL PORTB
+#elif defined (__AVR_ATtiny84__)
+#define PIN_USI_SCL PINA4
+#define PIN_USI_SDA PINA6
+#define PIN_USI_CL PINA
+#define DDR_USI DDRA
+#define DDR_USI_CL DDRA
+#define PORT_USI PORTA
+#define PORT_USI_CL PORTA
 #endif
 
 // Constants

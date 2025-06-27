@@ -9,13 +9,22 @@
 #include <avr/pgmspace.h>
 
 // external lib
+#if defined(SPCR)
 #include <SPIManager.h>
+#else
+#include <tinyspi.h>
+#endif
 #include <gpio.h>
 
-#define HAS_SERIAL
+//#define HAS_SERIAL
+#define HAS_INT0_SERIAL
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
+#endif
+
+#ifdef HAS_INT0_SERIAL
+#include <int0_serial.h>
 #endif
 
 // include files
@@ -125,22 +134,22 @@
 uint8_t radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe9};
 uint8_t tx_radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe9};
 
-void NRF24Manager::celow() { GPIO_SET_LOW(B, this->_ce_pin); }
+void NRF24Manager::celow() { GPIO_SET_LOW(NRF24_CX_PIN_PORT, this->_ce_pin); }
 
-void NRF24Manager::cehigh() { GPIO_SET_HIGH(B, this->_ce_pin); }
+void NRF24Manager::cehigh() { GPIO_SET_HIGH(NRF24_CX_PIN_PORT, this->_ce_pin); }
 
 //-------------------------------------------------------------------------------------
 // R/W Register
 uint8_t NRF24Manager::send_spi(uint8_t cmd, uint8_t *data, uint8_t size) {
   uint8_t status;
 
-  this->_spi->begin();
+  this->_spi->begin(this->_cs_pin);
   this->_spi->sendCommand(cmd);
   status = cmd; // sendCommand is replacing sent data with received
   if (size > 0) {
     this->_spi->sendCommandData(size, data);
   }
-  this->_spi->end();
+  this->_spi->end(this->_cs_pin);
 
   return status;
 }
@@ -155,8 +164,9 @@ uint8_t NRF24Manager::readRegister(uint8_t reg, uint8_t *data, uint8_t size) {
 
 //-------------------------------------------------------------------------------------
 // SPI init
-void NRF24Manager::init(SPIManager *s, uint8_t ce_pin) {
+void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
   this->_ce_pin = ce_pin;
+  this->_cs_pin = cs_pin;
   this->_spi = s;
 
 #ifdef HAS_INT0
@@ -174,7 +184,7 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin) {
 #endif
 
   // CE as outputs and initial states
-  GPIO_OUTPUT(B, this->_ce_pin);
+  GPIO_OUTPUT(NRF24_CX_PIN_PORT, this->_ce_pin);
   this->celow();
   ;
 
@@ -370,11 +380,11 @@ uint8_t NRF24Manager::dataAvailable(void) {
 void NRF24Manager::ack() {
   const char *ack = "A";
   unsigned int length = 1;
-  this->_spi->begin();
+  this->_spi->begin(this->_cs_pin);
   this->_spi->send(NRF24CMD_W_ACK_PAYLOAD);
   while (length--)
     this->_spi->send(*(uint8_t *)ack++);
-  this->_spi->end();
+  this->_spi->end(this->_cs_pin);
 }
 
 const char *NRF24Manager::read_message() {
@@ -446,12 +456,12 @@ uint8_t NRF24Manager::send(const char *msg) {
   // this->writeRegister(CONFIG_REG, &data, 1);
 
   // Start SPI, load message into TX_PAYLOAD
-  this->_spi->begin();
+  this->_spi->begin(this->_cs_pin);
   this->_spi->send(NRF24CMD_W_TX_PAYLOAD);
   while (length--)
     this->_spi->send(*(uint8_t *)msg++);
   this->_spi->send(0);
-  this->_spi->end();
+  this->_spi->end(this->_cs_pin);
 
   // Send message by pulling CE high for more than 10us
   this->cehigh();
@@ -487,11 +497,11 @@ uint8_t NRF24Manager::send_binary(uint8_t *msg, uint8_t length) {
   this->writeRegister(NRF24CMD_FLUSH_TX, 0, 0);
 
   // Start SPI, load message into TX_PAYLOAD
-  this->_spi->begin();
+  this->_spi->begin(this->_cs_pin);
   this->_spi->send(NRF24CMD_W_TX_PAYLOAD);
   while (length--)
     this->_spi->send(*(uint8_t *)msg++);
-  this->_spi->end();
+  this->_spi->end(this->_cs_pin);
 
   // Send message by pulling CE high for more than 10us
   this->cehigh();
@@ -679,6 +689,119 @@ void NRF24Manager::summary() {
   USART_WritePString(PSTR("  FIFO_STATUS: "));
   USART_WriteUInt(buffer[0], 2);
   USART_WritePString(PSTR("\n"));
+}
+
+#elif defined(HAS_INT0_SERIAL)
+
+void NRF24Manager::info() {
+
+  uint8_t buffer[5];
+  this->summary();
+
+  this->readRegister(EN_AA_REG, buffer, 1);
+  INT0_WritePString(PSTR("        EN_AA: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(EN_RXADDR_REG, buffer, 1);
+  INT0_WritePString(PSTR("    EN_RXADDR: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(SETUP_AW_REG, buffer, 1);
+  INT0_WritePString(PSTR("     SETUP_AW: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(SETUP_RETR_REG, buffer, 1);
+  INT0_WritePString(PSTR("   SETUP_RETR: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RF_CH_REG, buffer, 1);
+  INT0_WritePString(PSTR("        RF_CH: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RF_SETUP_REG, buffer, 1);
+  INT0_WritePString(PSTR("     RF_SETUP: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(DYNPD_REG, buffer, 1);
+  INT0_WritePString(PSTR("        DYNPD: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(FEATURE_REG, buffer, 1);
+  INT0_WritePString(PSTR("      FEATURE: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RX_ADDR_P0_REG, buffer, 5);
+  INT0_WritePString(PSTR("   RX_ADDR_P0: "));
+  for (uint8_t i = 0; i < 5; i++) {
+    INT0_WriteUInt(buffer[i], 16);
+    INT0_WritePString(PSTR(","));
+  }
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RX_PW_P0_REG, buffer, 1);
+  INT0_WritePString(PSTR("     RX_PW_P0: "));
+  INT0_WriteUInt(buffer[0]);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RX_ADDR_P1_REG, buffer, 5);
+  INT0_WritePString(PSTR("   RX_ADDR_P1: "));
+  for (uint8_t i = 0; i < 5; i++) {
+    INT0_WriteUInt(buffer[i], 16);
+    INT0_WritePString(PSTR(","));
+  }
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RX_PW_P1_REG, buffer, 1);
+  INT0_WritePString(PSTR("     RX_PW_P1: "));
+  INT0_WriteUInt(buffer[0]);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(TX_ADDR_REG, buffer, 5);
+  INT0_WritePString(PSTR("      TX_ADDR: "));
+  for (uint8_t i = 0; i < 5; i++) {
+    INT0_WriteUInt(buffer[i], 16);
+    INT0_WritePString(PSTR(","));
+  }
+  INT0_WritePString(PSTR("\n"));
+}
+
+void NRF24Manager::summary() {
+  uint8_t buffer[1];
+
+  INT0_WritePString(PSTR("NRF24 info:\n"));
+
+  this->readRegister(CONFIG_REG, buffer, 1);
+  INT0_WritePString(PSTR("       CONFIG: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(STATUS_REG, buffer, 1);
+  INT0_WritePString(PSTR("       STATUS: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(OBSERVE_TX_REG, buffer, 1);
+  INT0_WritePString(PSTR("   OBSERVE_TX: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RPD_REG, buffer, 1);
+  INT0_WritePString(PSTR("          RPD: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(FIFO_STATUS_REG, buffer, 1);
+  INT0_WritePString(PSTR("  FIFO_STATUS: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
 }
 
 #else

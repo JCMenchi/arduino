@@ -15,9 +15,17 @@ const uint8_t SPI_WAIT_DATA = 4;
 #define SPI_COMMAND_MASK 0xE0       // 1110 0000
 #define SPI_COMMAND_SIZE_MASK 0x1F  // 0001 1111
 
+#ifndef SPI_SELECT_PORT
+#define SPI_SELECT_PORT A
+#endif
+
+
 class SPIManager {
 public:
     SPIManager() : _state(SPI_INIT), _statusRegister(0) {}
+
+    void begin(uint8_t cspin);
+    void end(uint8_t cspin);
 
     uint8_t getState() const { return this->_state; }
     void setState(uint8_t s) { this->_state = s; }
@@ -32,6 +40,10 @@ public:
     bool isMaster() const { return ((this->_statusRegister & SPI_MODE_MASK) == SPI_MODE_MASTER); }
     bool sendCommand(uint8_t& command);
     bool sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffer);
+
+    bool send(uint8_t data);
+    bool sendData(uint8_t size, uint8_t* inbuffer);
+    bool sendCommandData(uint8_t size, uint8_t* inoutbuffer);
 
 private:
     uint8_t _state;

@@ -7,8 +7,8 @@
 #include <string.h>
 #include <avr/pgmspace.h>
 
-#if defined(__AVR_ATtiny45__)
-
+#if defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny84__)
+// NO USART on tinyAVR devices, use INT0 serial instead
 void USART_Init(uint8_t baudrate,
                 volatile void (*usart_rec_cb)(uint8_t, bool)) {}
 
@@ -20,7 +20,7 @@ void USART_WriteString(const char *str) {}
 void USART_WriteInt(int32_t i, uint8_t base) {}
 void USART_WriteUInt(uint32_t i, uint8_t base) {}
 
-uint8_t USART_GetLastChar() {}
+uint8_t USART_GetLastChar() { return 32; }
 
 #else
 #if defined(__AVR_ATmega8__)

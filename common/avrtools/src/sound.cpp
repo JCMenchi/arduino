@@ -13,6 +13,10 @@ volatile uint8_t timer2_pin_mask;   // mask
 
 volatile uint8_t tone_pin = 255;
 
+#if defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny84__)
+void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin_on_port, unsigned int frequency, unsigned long duration) {}
+void stopNote() {}
+#else
 static int8_t toneBegin(volatile uint8_t* mcu_port, uint8_t pin_on_port) {
   if (tone_pin == 255) {
     tone_pin = pin_on_port;
@@ -134,3 +138,5 @@ ISR(TIMER2_COMPA_vect) {
     stopNote();
   }
 }
+
+#endif

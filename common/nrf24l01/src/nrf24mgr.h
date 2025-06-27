@@ -16,13 +16,15 @@
 
 #define NRF24_MAX_MESSAGE_SIZE 32
 
+#define NRF24_CX_PIN_PORT A
+
 class SPIManager;
 
 class NRF24Manager {
 public:
-  NRF24Manager(uint8_t autoack) : _state(NRF24_INIT), _ce_pin(1), _spi(NULL), _autoack(autoack) {}
+  NRF24Manager(uint8_t autoack) : _state(NRF24_INIT), _ce_pin(1), _cs_pin(1), _spi(NULL), _autoack(autoack) {}
 
-  void init(SPIManager *s, uint8_t ce_pin);
+  void init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin);
 
   void changeState(uint8_t state);
   uint8_t state() const { return this->_state; }
@@ -50,7 +52,9 @@ private:
 
   uint8_t _state;
   uint8_t _ce_pin;
+  uint8_t _cs_pin;
   SPIManager *_spi;
+
   uint8_t _autoack;
 };
 

@@ -18,9 +18,6 @@
 #define COM_LED_PORTID A
 #define COM_LED_PIN 6
 
-#else
-#if defined(__AVR_ATmega8__)
-
 #elif defined(__AVR_ATmega8535__) || defined(__AVR_ATmega8515__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega32__)
 
 #define INT0_PORT D
@@ -32,6 +29,13 @@
 
 #define INT0_PORT D
 #define INT0_PIN PIND2
+
+#elif defined(__AVR_ATtiny84__)
+
+#define INT0_PORT B
+#define INT0_PIN PINB2
+//#define COM_LED_PORTID A
+//#define COM_LED_PIN 0
 
 #elif defined(__AVR_ATmega1284P__)
 
@@ -58,6 +62,7 @@ uint16_t subtract_cap(uint16_t num, uint16_t sub) {
 }
 
 uint8_t _transmitPin;
+
 // Expressed as 4-cycle delays (must never be 0!)
 uint16_t _rx_delay_centering;
 uint16_t _rx_delay_intrabit;
@@ -115,13 +120,14 @@ void INT0_Init(uint8_t tpin, volatile void (*INT0_rec_cb)(uint8_t)) {
 
     // set IO pin
     _transmitPin = tpin;
+
     // Transmit
     //  First write, then set output. If we do this the other way around,
     //  the pin would be output low for a short while before switching to
     //  output high. Now, it is input with pullup for a short while, which
     //  is fine. With inverse logic, either order is fine.
-    GPIO_SET_HIGH(INT0_PORT, _transmitPin);
-    GPIO_OUTPUT(INT0_PORT, _transmitPin);
+    GPIO_SET_HIGH(INT0_SERIAL_TRANSMIT_PORT, _transmitPin);
+    GPIO_OUTPUT(INT0_SERIAL_TRANSMIT_PORT, _transmitPin);
 
     // setRX(receivePin);
     GPIO_INPUT_PULLUP(INT0_PORT, INT0_PIN);
@@ -140,6 +146,10 @@ void INT0_Init(uint8_t tpin, volatile void (*INT0_rec_cb)(uint8_t)) {
     EIMSK |= (1 << INT0);
     // interrupt on failing edge
     EIMSK = (1 << ISC01);
+    #elif defined(__AVR_ATtiny84__)
+    GIMSK |= (1 << INT0);
+    // interrupt on failing edge
+    MCUCR = (1 << ISC01);
     #else
     GICR |= (1 << INT0);
     // interrupt on failing edge
@@ -166,6 +176,8 @@ ISR(INT0_vect) {
         // cause problems at higher baudrates.
         #if defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__)
         EIMSK &= ~(1 << INT0);
+        #elif defined(__AVR_ATtiny84__)
+        GIMSK &= ~(1 << INT0);
         #else
         GICR &= ~(1 << INT0);
         #endif
@@ -193,6 +205,8 @@ ISR(INT0_vect) {
         // Re-enable interrupts when we're sure to be inside the stop bit
         #if defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega328P__)
         EIMSK |= (1 << INT0);
+        #elif defined(__AVR_ATtiny84__)
+        GIMSK |= (1 << INT0);
         #else
         GICR |= (1 << INT0);
         #endif
@@ -224,7 +238,7 @@ uint8_t INT0_Transmit(uint8_t data) {
 
     // Write the start bit
     //*reg &= inv_mask;
-    GPIO_SET_LOW(INT0_PORT, _transmitPin);
+    GPIO_SET_LOW(INT0_SERIAL_TRANSMIT_PORT, _transmitPin);
 
     _delay_loop_2(delay);
 
@@ -232,10 +246,10 @@ uint8_t INT0_Transmit(uint8_t data) {
     for (uint8_t i = 8; i > 0; --i) {
         if (data & 1)  // choose bit
             //*reg |= reg_mask;  // send 1
-            GPIO_SET_HIGH(INT0_PORT, _transmitPin);
+            GPIO_SET_HIGH(INT0_SERIAL_TRANSMIT_PORT, _transmitPin);
         else
             //*reg &= inv_mask;  // send 0
-            GPIO_SET_LOW(INT0_PORT, _transmitPin);
+            GPIO_SET_LOW(INT0_SERIAL_TRANSMIT_PORT, _transmitPin);
 
         _delay_loop_2(delay);
         data >>= 1;
@@ -243,7 +257,7 @@ uint8_t INT0_Transmit(uint8_t data) {
 
     // restore pin to natural state
     // *reg |= reg_mask;
-    GPIO_SET_HIGH(INT0_PORT, _transmitPin);
+    GPIO_SET_HIGH(INT0_SERIAL_TRANSMIT_PORT, _transmitPin);
 
     SREG = oldSREG;  // turn interrupts back on
     #ifdef COM_LED_PORTID
@@ -322,5 +336,3 @@ void INT0_WriteFloat(float d, uint8_t width, uint8_t prec) {
 char INT0_SerialCommandMgr::commandBuffer[];
 uint8_t INT0_SerialCommandMgr::commandBufferPos = 0;
 uint8_t INT0_SerialCommandMgr::_hasCommand = 0;
-
-#endif

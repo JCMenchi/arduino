@@ -4,6 +4,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+
+#ifndef INT0_SERIAL_TRANSMIT_PORT
+#define INT0_SERIAL_TRANSMIT_PORT B
+#endif
+
 // BAUD RATE is only 9600, this is a bitbang serial line in case the hardware USART is used
 void INT0_Init(uint8_t tpin, volatile void (*INT0_rec_cb)(uint8_t));
 
