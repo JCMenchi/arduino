@@ -679,6 +679,13 @@ void CH1115Display::drawString(uint8_t x, uint8_t y, const char *pText) {
   }
 }
 
+static char numberbuffer[12];
+
+void CH1115Display::drawInt(uint8_t x, uint8_t y, int32_t num) {
+  ltoa(num, numberbuffer, 10);
+  drawString(x, y, numberbuffer);
+}
+
 void CH1115Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh,
                                const uint8_t *data, uint8_t mode) {
   if (y + sh > this->_height) {

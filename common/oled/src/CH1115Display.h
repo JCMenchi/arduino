@@ -74,6 +74,8 @@ public:
 
   void drawString(uint8_t x, uint8_t y, const char *pText);
   void drawString2(uint8_t x, uint8_t y, const char *pText);
+  void drawInt(uint8_t x, uint8_t y, int32_t num);
+
   void drawPixel(uint8_t x, uint8_t y, uint8_t color);
   void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);
   void drawSprite(uint8_t x, uint8_t y, uint8_t w, uint8_t h,

@@ -3,6 +3,9 @@
 #include "sprites.h"
 #include <CH1115Display.h>
 
+#include <stdlib.h>
+
+#include <highscore.h>
 
 const uint8_t NB_ALIENS = 8;
 const uint8_t NB_ALIEN_ROW = 4;
@@ -28,7 +31,17 @@ uint8_t alien_frame = 0;
 
 uint8_t dont_go_down = 5;
 
+int8_t alien_missile_state = -1;
+
+uint8_t alien_x_missile = 0;
+uint8_t alien_y_missile = 0;
+
 void update_alien_range() {
+
+  if (alien_missile_state == -1) {
+    alien_missile_state = rand() % NB_ALIENS;
+  }
+
   min_col = 0;
   max_col = NB_ALIENS;
   min_row = 0;
@@ -198,7 +211,9 @@ bool kill_alien(uint8_t x, uint8_t y) {
       return false;
     }
     aliens[col + row * NB_ALIENS] = 3; // start explosion frame
-
+    // update score
+    UserScore::CurrentScore += 10;
+    
     return true;
   }
 

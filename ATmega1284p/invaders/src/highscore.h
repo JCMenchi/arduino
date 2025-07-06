@@ -12,12 +12,20 @@ const uint16_t INVADERS_TYPE=0xDECA;
 const uint8_t UserScore_size = 6;
 
 struct UserScore {
+  static uint32_t CurrentScore;
+
+  static int8_t CurrentUserPos;
+  static int8_t CurrentUserCharPos;
+  
   UserScore() : score(0) {
     user[0] = '_';
     user[1] = '_';
     user[2] = '_';
     user[3] = 0;
   }
+
+  static int8_t UpdateHighScore(UserScore* scores, uint8_t count, uint32_t newScore);
+  static int8_t UpdateUserName(uint8_t direction);
 
   uint16_t score;
   char user[4];
@@ -42,27 +50,27 @@ struct UserScore {
     USART_WriteInt(score);
     USART_WriteString("\n");
   }
+
+  void copy(const UserScore &other) {
+    score = other.score;
+    user[0] = other.user[0];
+    user[1] = other.user[1];
+    user[2] = other.user[2];
+    user[3] = other.user[3];
+  }
+
+  void reset(uint32_t newScore = 0) {
+    score = newScore;
+    user[0] = '_';
+    user[1] = '_';
+    user[2] = '_';
+    user[3] = 0;
+  }
+
 };
 
 
-void UserScore_initEEPROM(UserScore *highscore, size_t UserScore_size) {
-  uint16_t marker = eeprom_read_word((uint16_t *)2);
-  if (marker == INVADERS_TYPE) {
-    USART_WriteString("EEPROM already initialized.\n");
-    highscore[0].load(4);
-    highscore[1].load(4 + UserScore_size);
-    highscore[2].load(4 + 2 * UserScore_size);
-
-    highscore[0].display();
-    highscore[1].display();
-    highscore[2].display();
-  } else {
-    USART_WriteString("Initialize EEPROM.\n");
-    eeprom_update_word((uint16_t *)2, INVADERS_TYPE);
-    highscore[0].store(4);
-    highscore[1].store(4 + UserScore_size);
-    highscore[2].store(4 + 2 * UserScore_size);
-  }
-}
+void UserScore_initEEPROM(UserScore *highscore, size_t UserScore_size);
+void UserScore_saveEEPROM(UserScore *highscore, size_t UserScore_size);
 
 #endif

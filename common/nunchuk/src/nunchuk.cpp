@@ -39,7 +39,7 @@ const uint32_t NUNCHUK_DEVICE_ID_PART2 = 0x00000000;
 bool Nunchuk::initialize() {
 
   // Init I2C com
-  TinyI2C.init();
+  TinyI2C.init(true);
 
   // normal init sequence; data is encrypted
   // for unencrypted use: START 0xF0, 0x55, STOP - START, 0xFB, 0x00, STOP

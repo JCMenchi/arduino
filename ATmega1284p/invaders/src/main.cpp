@@ -13,6 +13,9 @@
 #include "TinyI2CMaster.h"
 #include "common.h"
 #include "sound.h"
+#include <bitmap_font.h>
+
+#define READ_SERIAL_LINE 1
 
 // Define joystick thresholds
 #define JOYSTICK_THRESHOLD 10
@@ -116,25 +119,80 @@ bool command_interpretor(char c) {
 }
 #endif
 
+
+
+uint8_t current_note = 0;
+unsigned long start_note = 0;
+
+const uint8_t INIT_SCREEN = 0;
+const uint8_t HIGH_SCORE_SCREEN = 1;
+const uint8_t GAME_SCREEN = 2;
+const uint8_t VICTORY_SCREEN = 3;
+const uint8_t GAME_OVER_SCREEN = 4;
+const uint8_t HIGH_SCORE_UPDATE_SCREEN = 5;
+
+uint8_t screen_mode = INIT_SCREEN;
+
+const uint16_t SCREEN_TIME_MS = 5000;
+unsigned long init_screen_start = 0;
+unsigned long high_score_screen_start = 0;
+
+
+void changeToInit(uint32_t now) {
+    screen_mode = INIT_SCREEN;
+    init_screen_start = now;
+    drawStart(&ch1115);
+}
+
+void changeToHighScore(uint32_t now) {
+    screen_mode = HIGH_SCORE_SCREEN;
+    high_score_screen_start = now;
+    drawHighScore(&ch1115, highscore, 3);
+}
+
+void changeToHighScoreUpdate(int8_t pos) {
+    screen_mode = HIGH_SCORE_UPDATE_SCREEN;
+    drawHighScoreUpdate(&ch1115, highscore, 3, pos);
+}
+
+void changeToGameOver(uint32_t now) {
+    screen_mode = GAME_OVER_SCREEN;
+    drawGameOver(&ch1115);
+}
+
+void changeToVictory(uint32_t now) {
+    screen_mode = VICTORY_SCREEN;
+    drawVictory(&ch1115);
+}
+
 bool joystick_interpretor(Nunchuk* joystick) {
     
-    if (joystick->c_button()) {
-        if (gameOver) {
-            gameOver = 0;
-            drawScene(&ch1115, true);
-        }
+    if ((screen_mode == INIT_SCREEN || screen_mode == HIGH_SCORE_SCREEN) && joystick->c_button()) {
+        screen_mode = GAME_SCREEN;
+        UserScore::CurrentScore = 0;
+        drawScene(&ch1115, true);
         joystick->display();
         return true;
-    } else if (joystick->z_button()) {
-        if (!gameOver) {
-            spaceship_action(GUNFIRE_ACTION);
-        }
+    } else if (screen_mode == GAME_SCREEN && joystick->z_button()) {
+        spaceship_action(GUNFIRE_ACTION);
         return true;
-    } else if (!gameOver && joystick->joystick_x() > joystick->joystick_x_center() + JOYSTICK_THRESHOLD) {
+    } else if (screen_mode == GAME_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + JOYSTICK_THRESHOLD) {
         move_spaceship(MOVE_RIGHT);
         return true;
-    } else if (!gameOver && joystick->joystick_x() < joystick->joystick_x_center() - JOYSTICK_THRESHOLD) {
+    } else if (screen_mode == GAME_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - JOYSTICK_THRESHOLD) {
         move_spaceship(MOVE_LEFT);
+        return true;
+    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(MOVE_RIGHT);
+        return true;
+    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(MOVE_LEFT);
+        return true;
+    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() > joystick->joystick_y_center() + JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(MOVE_DOWN);
+        return true;
+    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() < joystick->joystick_y_center() - JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(MOVE_UP);
         return true;
     }
     
@@ -142,24 +200,52 @@ bool joystick_interpretor(Nunchuk* joystick) {
     return false;
 }
 
-uint8_t current_note = 0;
-unsigned long start_note = 0;
-
 void gameloop() {
-    // music
-   if (!gameOver) {
-        unsigned long now = milliseconds();
+    uint32_t now = milliseconds();
+    joystick.update();
+    joystick_interpretor(&joystick);
+
+    if (screen_mode == INIT_SCREEN) {
+        if (now > (init_screen_start + SCREEN_TIME_MS)) {
+            changeToHighScore(now);
+            _delay_ms(50);
+        }
+    } else if (screen_mode == HIGH_SCORE_SCREEN) {
+        if (now > (high_score_screen_start + 2*SCREEN_TIME_MS)) {
+            changeToInit(now);
+            _delay_ms(50);
+        }
+    } else if (screen_mode == GAME_SCREEN) {    
+        // music loop
         if (start_note == 0) {
             start_note = now;
             playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, sound_loop[current_note], SOUND_LOOP_NOTE_DURATION);
-        } else if (now > (start_note + SOUND_LOOP_NOTE_DURATION +
-                          SOUND_LOOP_NOTE_PAUSE)) {
+        } else if (now > (start_note + SOUND_LOOP_NOTE_DURATION + SOUND_LOOP_NOTE_PAUSE)) {
             stopNote();
             start_note = 0;
             current_note = (current_note + 1) % 4;
         }
-    } else {
-        stopNote();
+
+        drawScene(&ch1115, false);
+
+        // check win condition
+        uint8_t alien_status = check_alien_status();
+        if (alien_status != 0) {
+            if (check_alien_status() == ALIEN_WIN) {
+                changeToGameOver(now);
+            } else if (check_alien_status() == ALIEN_LOST) {
+                changeToVictory(now);
+            }
+            // check high score
+            int8_t changed = UserScore::UpdateHighScore(highscore, 3, UserScore::CurrentScore);
+            if (changed != -1) {
+                changeToHighScoreUpdate(changed);
+                UserScore_saveEEPROM(highscore, 3);
+            }
+            now = milliseconds();
+            changeToInit(now);
+        }
+
     }
 
     #ifdef READ_SERIAL_LINE 
@@ -177,6 +263,28 @@ void gameloop() {
         escape = false;
         memset(escape_buffer, 0, 10);
         escpos = 0;
+        USART_WriteString(work_buffer);
+        if (strcmp(work_buffer, "score") == 0) {
+            USART_WriteString("set score\n");
+            highscore[1].reset(42);
+            changeToHighScoreUpdate(1);
+            return;
+        } else if (strcmp(work_buffer, "reset") == 0) {
+            USART_WriteString("reset score\n");
+            highscore[0].reset();
+            highscore[1].reset();
+            highscore[2].reset();
+            UserScore_saveEEPROM(highscore, 3);
+            return;
+        } else if (strcmp(work_buffer, "gameover") == 0) {
+            // game over command
+            changeToGameOver(now);
+            return;
+        } else if (strcmp(work_buffer, "victory") == 0) {
+            // victory command
+            changeToVictory(now);
+            return;
+        }
         for (size_t i = 0; i < strlen(work_buffer); ++i) {
             if (command_interpretor(work_buffer[i])) {
                 break;
@@ -184,26 +292,6 @@ void gameloop() {
         }
     }
     #endif
-
-    joystick_interpretor(&joystick);
-
-    if (!gameOver) {
-        drawScene(&ch1115, false);
-
-        // check win condition
-        if (check_alien_status() == ALIEN_WIN) {
-            gameOver = 1;
-            drawGameOver(&ch1115);
-            drawStart(&ch1115);
-            joystick.update();
-        } else if (check_alien_status() == ALIEN_LOST) {
-            gameOver = 1;
-            drawVictory(&ch1115);
-            drawStart(&ch1115);
-            joystick.update();
-        }
-        
-    }
 }
 
 
@@ -246,11 +334,12 @@ void setup() {
     joystick.display_calibration();
     joystick.update();
     joystick.display();
+
+    // init random generator
+    srand(milliseconds());
 }
 
 void loop() {
-    joystick.update();
-    
     gameloop();
 }
 

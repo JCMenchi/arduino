@@ -20,6 +20,8 @@ class CH1115Display;
 
 #define GUNFIRE_ACTION 1
 
+class UserScore;
+
 void update_spaceship(CH1115Display *display);
 void move_spaceship(uint8_t direction);
 void spaceship_action(uint8_t action);
@@ -38,5 +40,7 @@ void drawGameOver(CH1115Display *display);
 void drawStart(CH1115Display *display);
 void drawVictory(CH1115Display *display);
 void drawScene(CH1115Display *display, bool first);
+void drawHighScore(CH1115Display *display, UserScore *highscore, uint8_t size);
+void drawHighScoreUpdate(CH1115Display *display, UserScore *highscore, uint8_t size, uint8_t pos);
 
 #endif
