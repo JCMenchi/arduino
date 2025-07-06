@@ -30,8 +30,8 @@ class SPIManager {
 
     void startMaster();
     bool isMaster() const { return ((this->_statusRegister & SPI_MODE_MASK) == SPI_MODE_MASTER); }
-    void begin();
-    void end();
+    void begin(uint8_t cspin);
+    void end(uint8_t cspin);
     bool send(uint8_t data);
     bool sendData(uint8_t size, uint8_t* inbuffer);
     bool sendCommand(uint8_t& command);

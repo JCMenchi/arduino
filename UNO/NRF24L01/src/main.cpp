@@ -9,9 +9,11 @@
 
 #include "SPIManager.h"
 #include "nrf24mgr.h"
+#include <gpio.h>
 
 
 const uint8_t RADIO_CE_PIN = 1;
+const uint8_t RADIO_CS_PIN = 2;
 
 SPIManager spi;
 NRF24Manager radio(1);
@@ -22,16 +24,20 @@ void setup() {
   // init serial com
   USART_Init(BAUD_RATE_115200, SerialCommandMgr::serialInput);
 
+  USART_WriteString("Init SPI\n");
   // init SPI bus to control NRF24
   spi.startMaster();
 
   // init NRF24
-  _delay_ms(100); // give some time to NRF24 module to start
-  radio.init(&spi, RADIO_CE_PIN);
+  USART_WriteString("Wait for radio\n");
+  _delay_ms(1000); // give some time to NRF24 module to start
+  USART_WriteString("Init radio\n");
+  radio.init(&spi, RADIO_CE_PIN, RADIO_CS_PIN);
 
   // ready to enter main loop
   USART_WriteString("UNO Ready\n");
 
+  radio.changeState(NRF24_POWERDOWN);
   radio.summary();
 }
 
@@ -39,9 +45,9 @@ void execCommand(const char* cmd) {
   // check if command is defined
   if (cmd == NULL || strlen(cmd) ==0) return;
 
-  // USART_WriteString("Exec command: ");
-  // USART_WriteString(cmd);
-  // USART_WriteString("\n\n");
+  USART_WriteString("Exec command: ");
+  USART_WriteString(cmd);
+  USART_WriteString("\n\n");
   if (strcmp(cmd, "status") == 0) {
     radio.summary();
   } else if (strcmp(cmd, "info") == 0) {
@@ -54,14 +60,14 @@ void execCommand(const char* cmd) {
     loopmsg = true;
   } else if (strcmp(cmd, "noloop") == 0) {
     loopmsg = false;
+  } else if (strcmp(cmd, "listen") == 0) {
+    radio.listen();
   } else if (strcmp(cmd, "on") == 0) {
     radio.changeState(NRF24_POWERUP);
-    radio.listen();
   } else if (strcmp(cmd, "off") == 0) {
     radio.changeState(NRF24_POWERDOWN);
   } else if (strlen(cmd) > 0) {
     radio.send(cmd);
-    radio.listen();
     _delay_ms(100);
   }
 }
@@ -80,6 +86,7 @@ void loop() {
     execCommand(SerialCommandMgr::command());
   }
 
+  
   if (radio.dataAvailable()) {
     USART_WriteString("now ");
     USART_WriteUInt(now/1000);
@@ -94,6 +101,7 @@ void loop() {
     }
     USART_WriteString("\n");   
   }
+  
 
   if (now - prevTime > PERIOD_MS && loopmsg) {
     ultoa(count, number, 16);

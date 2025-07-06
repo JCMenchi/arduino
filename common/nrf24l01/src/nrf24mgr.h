@@ -16,7 +16,9 @@
 
 #define NRF24_MAX_MESSAGE_SIZE 32
 
+#ifndef NRF24_CX_PIN_PORT
 #define NRF24_CX_PIN_PORT A
+#endif
 
 class SPIManager;
 

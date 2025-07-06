@@ -369,6 +369,11 @@ void NRF24Manager::listen(void) {
 }
 
 uint8_t NRF24Manager::dataAvailable(void) {
+
+  if (this->_state != NRF24_RECEIVE) {
+    return 0; // not in receive mode => no data
+  }
+
   uint8_t fifo;
   this->readRegister(FIFO_STATUS_REG, &fifo, 1);
   if (!(fifo & (1 << FIFO_STATUS_REG_RX_EMPTY))) {
