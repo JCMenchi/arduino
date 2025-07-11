@@ -1,5 +1,5 @@
 
-#define HAS_NUNCHUK
+//#define HAS_NUNCHUK
 
 #include <avr/io.h>
 #include <gpio.h>
@@ -22,7 +22,7 @@ Nunchuk joystick;
 #endif
 
 SPIManager spimgr;
-NRF24Manager radio(true);
+NRF24Manager radio(0);
 
 //#define __SFR_OFFSET 0x20
 //#define _MMIO_BYTE(mem_addr) (*(volatile uint8_t *)(mem_addr))
@@ -59,7 +59,7 @@ void setup() {
     GPIO_OUTPUT(A, 2);
     GPIO_SET_HIGH(A, 2);
     radio.init(&spimgr, PA1, PA2);  // Initialize NRF24 radio with SPI manager and CE pin
-    radio.listen();
+    radio.changeState(NRF24_POWERUP);
     radio.info();
 }
 
@@ -100,7 +100,7 @@ void loop() {
     }
     #endif
 
-    if (currentMillis - previousMillis >= joystick.joystick_x() * interval / 255) {
+    if (currentMillis - previousMillis >=  interval) {
         // save the last time you blinked the LED
         previousMillis = currentMillis;
 

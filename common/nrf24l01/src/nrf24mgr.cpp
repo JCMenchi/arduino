@@ -9,15 +9,11 @@
 #include <avr/pgmspace.h>
 
 // external lib
-#if defined(SPCR)
-#include <SPIManager.h>
-#else
 #include <tinyspi.h>
-#endif
 #include <gpio.h>
 
-//#define HAS_SERIAL
-#define HAS_INT0_SERIAL
+#define HAS_SERIAL
+//#define HAS_INT0_SERIAL
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
@@ -131,8 +127,8 @@
 
 //-----------------------------------------------------------------------------------------
 // RADIO address
-uint8_t radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe9};
-uint8_t tx_radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe9};
+uint8_t radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe4};
+uint8_t tx_radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe4};
 
 void NRF24Manager::celow() { GPIO_SET_LOW(NRF24_CX_PIN_PORT, this->_ce_pin); }
 
@@ -156,6 +152,7 @@ uint8_t NRF24Manager::send_spi(uint8_t cmd, uint8_t *data, uint8_t size) {
 
 uint8_t NRF24Manager::writeRegister(uint8_t reg, uint8_t *data, uint8_t size) {
   return this->send_spi(NRF24CMD_W_REGISTER | reg, data, size);
+  _delay_ms(10);
 }
 
 uint8_t NRF24Manager::readRegister(uint8_t reg, uint8_t *data, uint8_t size) {
@@ -232,7 +229,7 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
   this->writeRegister(SETUP_RETR_REG, &cmd, 1);
 
   // Sets the frequency channel
-  cmd = 0x0F;
+  cmd = 0x07;
   this->writeRegister(RF_CH_REG, &cmd, 1);
 
   // Setup
@@ -246,12 +243,6 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
         (1 << STATUS_REG_MAX_RT); // MAX RT
   this->writeRegister(STATUS_REG, &cmd, 1);
 
-  // Dynamic payload on all pipes
-  cmd = (1 << DYNPD_REG_DPL_P0) | (0 << DYNPD_REG_DPL_P1) |
-        (0 << DYNPD_REG_DPL_P2) | (0 << DYNPD_REG_DPL_P3) |
-        (0 << DYNPD_REG_DPL_P4) | (0 << DYNPD_REG_DPL_P5);
-  this->writeRegister(DYNPD_REG, &cmd, 1);
-
   // Enable dynamic payload and autoack if set
   if (this->_autoack) {
     cmd = (1 << FEATURE_REG_EN_DPL) | (1 << FEATURE_REG_EN_ACK_PAY) |
@@ -261,6 +252,11 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
           (0 << FEATURE_REG_EN_DYN_ACK);
   }
   this->writeRegister(FEATURE_REG, &cmd, 1);
+  // Dynamic payload on all pipes
+  cmd = (1 << DYNPD_REG_DPL_P0) | (0 << DYNPD_REG_DPL_P1) |
+        (0 << DYNPD_REG_DPL_P2) | (0 << DYNPD_REG_DPL_P3) |
+        (0 << DYNPD_REG_DPL_P4) | (0 << DYNPD_REG_DPL_P5);
+  this->writeRegister(DYNPD_REG, &cmd, 1);
 
   // Open pipe
   this->writeRegister(RX_ADDR_P0_REG, radio_address, 5);
@@ -369,10 +365,6 @@ void NRF24Manager::listen(void) {
 }
 
 uint8_t NRF24Manager::dataAvailable(void) {
-
-  if (this->_state != NRF24_RECEIVE) {
-    return 0; // not in receive mode => no data
-  }
 
   uint8_t fifo;
   this->readRegister(FIFO_STATUS_REG, &fifo, 1);

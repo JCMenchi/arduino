@@ -3,7 +3,11 @@
 #include <util/delay.h>
 #include <millisec.h>
 
+//#define HAS_SERIAL
+
+#ifdef HAS_SERIAL
 #include <usart_serial.h>
+#endif
 
 #define MICROSEC_ROUNDTRIP_PER_CM 58 // number of ms for 1 cm (sound speed is approximately 343 m/s)
                                      // if obstacle distance is 1 cm, sound travels 2 cm (to the obstacle and back)
@@ -15,12 +19,18 @@
 
 int16_t HC_SR04::read() {
 
-    //USART_WriteString("HC-SR04 Trig high\n");
+    #ifdef HAS_SERIAL
+    USART_WriteString("HC-SR04 Trig high\n");
+    #endif
+
     // Send a 10us pulse to trigger the sensor
     GPIO_SET_HIGH(HC_SR04_PORTID, triggerPin);
     _delay_us(TRIGGER_DELAY_US);
     GPIO_SET_LOW(HC_SR04_PORTID, triggerPin);
-    //USART_WriteString("HC-SR04 Trig low\n");
+
+    #ifdef HAS_SERIAL
+    USART_WriteString("HC-SR04 Trig low\n");
+    #endif
 
     // Wait for echo to start, with timeout
     uint32_t prevTimeMS = milliseconds();
@@ -33,7 +43,10 @@ int16_t HC_SR04::read() {
     if (delay > MAX_SENSOR_DELAY_MS) {
         return -1;
     }
-    //USART_WriteString("HC-SR04 Echo high\n");
+
+    #ifdef HAS_SERIAL
+    USART_WriteString("HC-SR04 Echo high\n");
+    #endif
 
     // Measure the duration of the echo pulse, in 10 us steps
     uint16_t maxStep = timeout / STEP_RESOLUTION;
@@ -42,7 +55,9 @@ int16_t HC_SR04::read() {
         _delay_us(STEP_RESOLUTION); // Wait for a short time to avoid busy waiting
         step++;
     }
+
     //USART_WriteString("HC-SR04 Echo low\n");
+
     if (step >= maxStep) {
         return -2;
     }

@@ -35,6 +35,11 @@ SSD1306Display display(128, 32);
 HC_SR04 frontradar(4, 5, 20000UL); // Trigger pin 4, Echo pin 5, timeout 20ms
 int16_t distance = -3;
 
+#include <nrf24mgr.h>
+#include <tinyspi.h>
+SPIManager spimgr;
+NRF24Manager radio(0);
+
 void setup() {
     // init debug LED
     GPIO_OUTPUT(LED_PORTID, ON_LED_PIN);
@@ -70,6 +75,18 @@ void setup() {
 
     // init Bluetooth
     INT0_Init(BT_TX, INT0_SerialCommandMgr::serialInput);
+
+    spimgr.startMaster();
+
+    // init NRF24
+    _delay_ms(100); // give some time to NRF24 module to start
+    USART_WriteString("Init radio.\n");
+
+    GPIO_OUTPUT(A, 2);
+    GPIO_SET_HIGH(A, 2);
+    radio.init(&spimgr, PA1, PA2);  // Initialize NRF24 radio with SPI manager and CE pin
+    radio.changeState(NRF24_POWERUP);
+    radio.info();
 }
 
 #define STATUS_CMD "status"

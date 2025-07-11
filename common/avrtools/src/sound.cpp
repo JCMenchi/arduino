@@ -13,7 +13,8 @@ volatile uint8_t timer2_pin_mask;   // mask
 
 volatile uint8_t tone_pin = 255;
 
-#if defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny84__)
+
+#if defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny84__) || defined(__AVR_ATmega32__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega8535__)
 void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin_on_port, unsigned int frequency, unsigned long duration) {}
 void stopNote() {}
 #else
@@ -31,6 +32,7 @@ static int8_t toneBegin(volatile uint8_t* mcu_port, uint8_t pin_on_port) {
     TCCR2B = 0;
     TCCR2A |= (1 << WGM21);
     TCCR2B |= (1 << CS20);
+
     timer2_pin_port = mcu_port;
     timer2_pin_mask = (1 << pin_on_port);
 

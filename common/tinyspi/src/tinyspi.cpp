@@ -50,7 +50,7 @@ volatile struct SPIdriverStatus_t spiX_status; //!< The driver status bits.
 #if defined(SPCR)
 
 // set PORT and PIN
-#if defined(__AVR_ATmega8535__)
+#if defined(__AVR_ATmega8535__) || defined(__AVR_ATmega32__)
 #define PORT_SPI    PORTB
 #define PIN_SPI     PINB
 #define DDR_SPI		DDRB
@@ -95,15 +95,22 @@ void SPIManager::startMaster() {
            (0 << DORD) | // MSB first
            (1 << MSTR) | // set as master
            (0 << CPOL) | (0 << CPHA) | // mode 0
-           (1 << SPR1) | (1 << SPR0); // CPU freq / 64
-
-    SPSR |= _BV(SPI2X);
+           (1 << SPI2X) | (1 << SPR1) | (1 << SPR0); // CPU freq / 64
 
     // init output
     PORT_SPI &= ~(_BV(DD_MOSI) | _BV(DD_SCK) | _BV(DD_CS));
 
     this->_statusRegister = SPI_MODE_MASTER;
     SPDR = this->_statusRegister;
+}
+
+void SPIManager::begin(uint8_t cspin) {
+    // pull low for chip select
+    PORT_SPI &= ~_BV(cspin);
+}
+
+void SPIManager::end(uint8_t cspin) {
+    PORT_SPI |= _BV(cspin);
 }
 
 bool SPIManager::receiveCommand(uint8_t& command) {
@@ -165,6 +172,16 @@ bool SPIManager::sendCommand(uint8_t& command) {
     return true;
 }
 
+bool SPIManager::send(uint8_t data) {
+    if (this->isSlave()) return false; // not used if slave
+
+    SPDR = data;
+    // Wait for send complete
+    loop_until_bit_is_set(SPSR, SPIF);
+
+    return true;
+}
+
 bool SPIManager::sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inbuffer) {
     if (this->isSlave()) return false; // not used if slave
 
@@ -172,9 +189,24 @@ bool SPIManager::sendCommandData(uint8_t size, uint8_t* outbuffer,  uint8_t* inb
         // copy output byte
         SPDR = outbuffer[i];
         // Wait for send complete
-        do { } while (bit_is_clear(SPSR, SPIF));
+        loop_until_bit_is_set(SPSR, SPIF);
         // copy Data Register
         inbuffer[i] = SPDR;
+    }
+    
+    return true;
+}
+
+bool SPIManager::sendCommandData(uint8_t size, uint8_t* inoutbuffer) {
+    if (this->isSlave()) return false; // not used if slave
+
+    for(uint8_t i =0; i < size; i++) {
+        // copy output byte
+        SPDR = inoutbuffer[i];
+        // Wait for send complete
+        loop_until_bit_is_set(SPSR, SPIF);
+        // copy Data Register
+        inoutbuffer[i] = SPDR;
     }
     
     return true;
