@@ -15,7 +15,7 @@
 #include "sound.h"
 #include <bitmap_font.h>
 
-#define READ_SERIAL_LINE 1
+//#define READ_SERIAL_LINE 1
 
 // Define joystick thresholds
 #define JOYSTICK_THRESHOLD 10
@@ -150,8 +150,9 @@ void changeToHighScore(uint32_t now) {
     drawHighScore(&ch1115, highscore, 3);
 }
 
-void changeToHighScoreUpdate(int8_t pos) {
+void changeToHighScoreUpdate(uint32_t now, int8_t pos) {
     screen_mode = HIGH_SCORE_UPDATE_SCREEN;
+    high_score_screen_start = now;
     drawHighScoreUpdate(&ch1115, highscore, 3, pos);
 }
 
@@ -215,6 +216,11 @@ void gameloop() {
             changeToInit(now);
             _delay_ms(50);
         }
+    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN) {
+        if (now > (high_score_screen_start + 2*SCREEN_TIME_MS)) {
+            changeToInit(now);
+            _delay_ms(50);
+        }
     } else if (screen_mode == GAME_SCREEN) {    
         // music loop
         if (start_note == 0) {
@@ -231,19 +237,24 @@ void gameloop() {
         // check win condition
         uint8_t alien_status = check_alien_status();
         if (alien_status != 0) {
-            if (check_alien_status() == ALIEN_WIN) {
+            // draw result
+            if (alien_status == ALIEN_WIN) {
                 changeToGameOver(now);
-            } else if (check_alien_status() == ALIEN_LOST) {
+            } else if (alien_status == ALIEN_LOST) {
                 changeToVictory(now);
             }
+            // reset number of life
+            nb_spaceship = MAX_LIFE;
+
             // check high score
             int8_t changed = UserScore::UpdateHighScore(highscore, 3, UserScore::CurrentScore);
-            if (changed != -1) {
-                changeToHighScoreUpdate(changed);
-                UserScore_saveEEPROM(highscore, 3);
-            }
             now = milliseconds();
-            changeToInit(now);
+            if (changed != -1) {
+                changeToHighScoreUpdate(now, changed);
+                UserScore_saveEEPROM(highscore, 3);
+            } else {
+                changeToInit(now);
+            }
         }
 
     }
@@ -267,7 +278,7 @@ void gameloop() {
         if (strcmp(work_buffer, "score") == 0) {
             USART_WriteString("set score\n");
             highscore[1].reset(42);
-            changeToHighScoreUpdate(1);
+            changeToHighScoreUpdate(milliseconds(), 1);
             return;
         } else if (strcmp(work_buffer, "reset") == 0) {
             USART_WriteString("reset score\n");

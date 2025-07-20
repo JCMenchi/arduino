@@ -43,4 +43,10 @@ void drawScene(CH1115Display *display, bool first);
 void drawHighScore(CH1115Display *display, UserScore *highscore, uint8_t size);
 void drawHighScoreUpdate(CH1115Display *display, UserScore *highscore, uint8_t size, uint8_t pos);
 
+
+extern uint8_t x_spaceship_position;
+
+const uint8_t MAX_LIFE = 1;
+extern uint8_t nb_spaceship;
+
 #endif
