@@ -75,6 +75,31 @@ void drawHighScore(CH1115Display *display, UserScore *highscore, uint8_t size) {
   display->scroll(CH1115_SCROLL_CONTINUOUS);
 }
 
+uint32_t prevHighScoreUpdate = 0;
+bool drawName = true;
+
+void updateHighScore(CH1115Display *display, UserScore *highscore, uint8_t size) {
+  const uint8_t ybase = 4;
+  if (UserScore::CurrentUserPos < 0 || UserScore::CurrentUserPos >= size) {
+    // Invalid position, do nothing
+    return;
+  }
+  uint32_t now = milliseconds();
+
+  if (now - prevHighScoreUpdate > 500) {
+    prevHighScoreUpdate = now;
+    drawName = !drawName; // Toggle name drawing every 500 ms
+  }
+
+  if (drawName) {
+    display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + (UserScore::CurrentUserPos + 1) * (FONT_CHAR_HEIGHT + 4), highscore[UserScore::CurrentUserPos].user);
+  } else {
+    display->drawString(20 + (6 + UserScore::CurrentUserCharPos)* FONT_CHAR_WIDTH, ybase + (UserScore::CurrentUserPos + 1) * (FONT_CHAR_HEIGHT + 4), " ");
+  }
+    
+
+}
+
 #define SHOW_PERFORMANCE 1
 
 #ifdef SHOW_PERFORMANCE

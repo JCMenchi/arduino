@@ -1,6 +1,7 @@
 
 
 #include <CH1115Display.h>
+#include <bitmap_font.h>
 #include <highscore.h>
 #include <millisec.h>
 #include <nunchuk.h>
@@ -13,7 +14,6 @@
 #include "TinyI2CMaster.h"
 #include "common.h"
 #include "sound.h"
-#include <bitmap_font.h>
 
 //#define READ_SERIAL_LINE 1
 
@@ -26,7 +26,7 @@ UserScore highscore[3];
 
 uint8_t gameOver = 1;
 
-#ifdef READ_SERIAL_LINE 
+#ifdef READ_SERIAL_LINE
 char buffer[64];
 
 bool esccommand(const char *escape_buffer) {
@@ -119,8 +119,6 @@ bool command_interpretor(char c) {
 }
 #endif
 
-
-
 uint8_t current_note = 0;
 unsigned long start_note = 0;
 
@@ -137,7 +135,6 @@ const uint16_t SCREEN_TIME_MS = 5000;
 unsigned long init_screen_start = 0;
 unsigned long high_score_screen_start = 0;
 
-
 void changeToInit(uint32_t now) {
     screen_mode = INIT_SCREEN;
     init_screen_start = now;
@@ -153,6 +150,9 @@ void changeToHighScore(uint32_t now) {
 void changeToHighScoreUpdate(uint32_t now, int8_t pos) {
     screen_mode = HIGH_SCORE_UPDATE_SCREEN;
     high_score_screen_start = now;
+
+    UserScore::CurrentUserPos = pos;
+    UserScore::CurrentUserCharPos = 0;
     drawHighScoreUpdate(&ch1115, highscore, 3, pos);
 }
 
@@ -166,9 +166,8 @@ void changeToVictory(uint32_t now) {
     drawVictory(&ch1115);
 }
 
-bool joystick_interpretor(Nunchuk* joystick) {
-    
-    if ((screen_mode == INIT_SCREEN || screen_mode == HIGH_SCORE_SCREEN) && joystick->c_button()) {
+bool joystick_interpretor(Nunchuk *joystick, bool changed) {
+    if (changed && (screen_mode == INIT_SCREEN || screen_mode == HIGH_SCORE_SCREEN) && joystick->c_button()) {
         screen_mode = GAME_SCREEN;
         UserScore::CurrentScore = 0;
         drawScene(&ch1115, true);
@@ -183,28 +182,38 @@ bool joystick_interpretor(Nunchuk* joystick) {
     } else if (screen_mode == GAME_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - JOYSTICK_THRESHOLD) {
         move_spaceship(MOVE_LEFT);
         return true;
-    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + JOYSTICK_THRESHOLD) {
-        UserScore::UpdateUserName(MOVE_RIGHT);
+    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() > joystick->joystick_y_center() + 4 * JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(highscore, 3, MOVE_UP);
         return true;
-    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - JOYSTICK_THRESHOLD) {
-        UserScore::UpdateUserName(MOVE_LEFT);
+    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() < joystick->joystick_y_center() - 4 * JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(highscore, 3, MOVE_DOWN);
         return true;
-    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() > joystick->joystick_y_center() + JOYSTICK_THRESHOLD) {
-        UserScore::UpdateUserName(MOVE_DOWN);
+    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + 6 * JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(highscore, 3, MOVE_RIGHT);
         return true;
-    } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() < joystick->joystick_y_center() - JOYSTICK_THRESHOLD) {
-        UserScore::UpdateUserName(MOVE_UP);
+    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - 6 * JOYSTICK_THRESHOLD) {
+        UserScore::UpdateUserName(highscore, 3, MOVE_LEFT);
+        return true;
+    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->z_button()) {
+        USART_WriteString("Validate High Score username\n");
+        UserScore_saveEEPROM(highscore, 3);
+        UserScore::CurrentScore = 0;
+        UserScore::CurrentUserPos = -1;
+        UserScore::CurrentUserCharPos = -1;
+        _delay_ms(50);
+        changeToInit(milliseconds());
+        _delay_ms(50);
+        joystick->update();
         return true;
     }
-    
 
     return false;
 }
 
 void gameloop() {
     uint32_t now = milliseconds();
-    joystick.update();
-    joystick_interpretor(&joystick);
+    bool changed = joystick.update();
+    joystick_interpretor(&joystick, changed);
 
     if (screen_mode == INIT_SCREEN) {
         if (now > (init_screen_start + SCREEN_TIME_MS)) {
@@ -212,16 +221,14 @@ void gameloop() {
             _delay_ms(50);
         }
     } else if (screen_mode == HIGH_SCORE_SCREEN) {
-        if (now > (high_score_screen_start + 2*SCREEN_TIME_MS)) {
+        if (now > (high_score_screen_start + 2 * SCREEN_TIME_MS)) {
             changeToInit(now);
             _delay_ms(50);
         }
     } else if (screen_mode == HIGH_SCORE_UPDATE_SCREEN) {
-        if (now > (high_score_screen_start + 2*SCREEN_TIME_MS)) {
-            changeToInit(now);
-            _delay_ms(50);
-        }
-    } else if (screen_mode == GAME_SCREEN) {    
+        updateHighScore(&ch1115, highscore, 3);
+        _delay_ms(50);
+    } else if (screen_mode == GAME_SCREEN) {
         // music loop
         if (start_note == 0) {
             start_note = now;
@@ -250,16 +257,20 @@ void gameloop() {
             int8_t changed = UserScore::UpdateHighScore(highscore, 3, UserScore::CurrentScore);
             now = milliseconds();
             if (changed != -1) {
+                USART_WriteString("New score detected: ");
+                USART_WriteInt(changed);
+                USART_WriteString(" ");
+                USART_WriteInt(UserScore::CurrentScore);
+                USART_WriteString("\n");
                 changeToHighScoreUpdate(now, changed);
                 UserScore_saveEEPROM(highscore, 3);
             } else {
                 changeToInit(now);
             }
         }
-
     }
 
-    #ifdef READ_SERIAL_LINE 
+#ifdef READ_SERIAL_LINE
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
         if (serial_buffer_pos) {
             memcpy(work_buffer, (const void *)serial_buffer, 10);
@@ -302,22 +313,20 @@ void gameloop() {
             }
         }
     }
-    #endif
+#endif
 }
-
 
 /*
   Init and main loop
 */
 void setup() {
-    
-    #ifdef READ_SERIAL_LINE
+#ifdef READ_SERIAL_LINE
     USART_Init(BAUD_RATE_115200, SERIAL_CB);
     serial_buffer_pos = 0;
-    #else
+#else
     USART_Init(BAUD_RATE_115200, NULL);
-    #endif
-    
+#endif
+
     USART_WriteString("Welcome.\n");
 
     // init high score EEPROM

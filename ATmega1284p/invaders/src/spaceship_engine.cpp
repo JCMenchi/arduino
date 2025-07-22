@@ -93,7 +93,7 @@ void clear_missile(uint8_t x, uint8_t y, CH1115Display *display) {
   }
 
   display->startPageDrawing(x, y);
-  uint8_t prev = display->updatePageColumn(0x00, OVERWRITE_MODE, missile_pattern);
+  display->updatePageColumn(0x00, OVERWRITE_MODE, missile_pattern);
   display->endPageDrawing();
 }
 

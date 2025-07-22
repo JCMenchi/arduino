@@ -131,12 +131,25 @@ bool Nunchuk::update() {
   _buffer[4] = TinyI2C.read();
   _buffer[5] = TinyI2C.read();
   TinyI2C.stop();
+  
 
   char joystick_pos = this->get_joystick_position();
   if ((_joystick_prev_position != joystick_pos) || (_buttons != (_buffer[5] & 0x3))) {
     _joystick_prev_position = joystick_pos;
     _buttons = _buffer[5] & 0x3;
-    
+
+    #ifdef HAS_SERIAL
+    if (_buttons != 3) {
+      USART_WriteString("Button: ");
+      USART_WriteString(z_button()?"Z":"z");
+      USART_WriteString(" ");
+      USART_WriteString(c_button()?"C":"c");
+      USART_WriteString(" ");
+      USART_WriteUInt(_buttons, 2);
+      USART_WriteString("\n");
+    } 
+    #endif
+
     return true;
   }
 

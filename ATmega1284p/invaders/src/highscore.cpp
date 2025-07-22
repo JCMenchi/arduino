@@ -1,4 +1,5 @@
 
+#include <common.h>
 #include <highscore.h>
 
 uint32_t UserScore::CurrentScore = 0;
@@ -10,8 +11,8 @@ void UserScore_initEEPROM(UserScore *highscore, size_t UserScore_size) {
     if (marker == INVADERS_TYPE) {
         USART_WriteString("EEPROM already initialized.\n");
         highscore[0].load(4);
-        highscore[1].load(4 + UserScore_size);
-        highscore[2].load(4 + 2 * UserScore_size);
+        highscore[1].load(4 + 5);
+        highscore[2].load(4 + 2 * 5);
 
         highscore[0].display();
         highscore[1].display();
@@ -20,8 +21,8 @@ void UserScore_initEEPROM(UserScore *highscore, size_t UserScore_size) {
         USART_WriteString("Initialize EEPROM.\n");
         eeprom_update_word((uint16_t *)2, INVADERS_TYPE);
         highscore[0].store(4);
-        highscore[1].store(4 + UserScore_size);
-        highscore[2].store(4 + 2 * UserScore_size);
+        highscore[1].store(4 + 5);
+        highscore[2].store(4 + 2 * 5);
     }
 }
 
@@ -29,8 +30,8 @@ void UserScore_saveEEPROM(UserScore *highscore, size_t UserScore_size) {
     USART_WriteString("Save EEPROM.\n");
     eeprom_update_word((uint16_t *)2, INVADERS_TYPE);
     highscore[0].store(4);
-    highscore[1].store(4 + UserScore_size);
-    highscore[2].store(4 + 2 * UserScore_size);
+    highscore[1].store(4 + 5);
+    highscore[2].store(4 + 2 * 5);
 }
 
 // Add this method:
@@ -56,7 +57,35 @@ int8_t UserScore::UpdateHighScore(UserScore *scores, uint8_t count, uint32_t new
     return pos;
 }
 
-int8_t UserScore::UpdateUserName(uint8_t direction) {
+void UserScore::UpdateUserName(UserScore *scores, uint8_t count, uint8_t direction) {
 
-  return 0;
+    if (direction == MOVE_RIGHT) {
+        if (CurrentUserCharPos < 2) {
+            CurrentUserCharPos++;
+        }
+    } else if (direction == MOVE_LEFT) {
+        if (CurrentUserCharPos > 0) {
+            CurrentUserCharPos--;
+        }
+    } else if (direction == MOVE_DOWN) {
+        if (scores[CurrentUserPos].user[CurrentUserCharPos] < 'Z') {
+            scores[CurrentUserPos].user[CurrentUserCharPos] += 1;
+        } else {
+            scores[CurrentUserPos].user[CurrentUserCharPos] = 'A';
+        }
+    } else if (direction == MOVE_UP) {
+        if (scores[CurrentUserPos].user[CurrentUserCharPos] > 'A') {
+            scores[CurrentUserPos].user[CurrentUserCharPos] -= 1;
+        } else {
+            scores[CurrentUserPos].user[CurrentUserCharPos] = 'Z';
+        }
+    }
+
+    USART_WriteString("UpdateUserName: ");
+    USART_WriteInt(CurrentUserPos);
+    USART_WriteString(" ");
+    USART_WriteInt(CurrentUserCharPos);
+    USART_WriteString(" ");
+    USART_WriteString(scores[CurrentUserPos].user);
+    USART_WriteString("\n");
 }

@@ -26,7 +26,7 @@ const char NUNCHUK_JOYSTICK_UNKNOWN = '?';
 class Nunchuk {
 public:
 
-  Nunchuk() : _joystick_prev_position(NUNCHUK_JOYSTICK_UNKNOWN), _buttons(0) {}
+  Nunchuk() : _joystick_prev_position(NUNCHUK_JOYSTICK_UNKNOWN), _buttons(3) {}
 
   bool initialize();
 

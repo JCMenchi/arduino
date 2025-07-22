@@ -214,7 +214,7 @@ void do_update_alien(CH1115Display *display) {
 
   // --- Alien missile logic ---
   // If no missile, randomly fire one
-  if (alien_missile_state == -1 && (rand() % 2 == 0)) { // 1/5 chance per frame
+  if (alien_missile_state == -1 && (rand() % 5 == 0)) { // 1/5 chance per frame
     // Find a random alien in bottom row that is alive
     uint8_t candidates_col[NB_ALIENS_COL];
     uint8_t candidates_row[NB_ALIENS_COL];
@@ -259,7 +259,11 @@ void do_update_alien(CH1115Display *display) {
       alien_missile_state = -1;
       if (nb_spaceship > 0) {
         nb_spaceship -= 1;
-        UserScore::CurrentScore -= 10; // Penalty for being hit
+        if (UserScore::CurrentScore > 10) {
+          UserScore::CurrentScore -= 10; // Penalty for being hit
+        } else {
+          UserScore::CurrentScore = 0; // Don't go negative
+        }
       }
     }
     // Check if missile is off screen
