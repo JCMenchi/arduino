@@ -20,7 +20,6 @@ class CH1115Display;
 
 #define GUNFIRE_ACTION 1
 
-class UserScore;
 
 void update_spaceship(CH1115Display *display);
 void move_spaceship(uint8_t direction);
@@ -36,13 +35,8 @@ bool kill_alien(uint8_t x, uint8_t y);
 uint8_t check_alien_status();
 
 
-void drawGameOver(CH1115Display *display);
-void drawStart(CH1115Display *display);
-void drawVictory(CH1115Display *display);
+
 void drawScene(CH1115Display *display, bool first);
-void drawHighScore(CH1115Display *display, UserScore *highscore, uint8_t size);
-void updateHighScore(CH1115Display *display, UserScore *highscore, uint8_t size);
-void drawHighScoreUpdate(CH1115Display *display, UserScore *highscore, uint8_t size, uint8_t pos);
 
 
 extern uint8_t x_spaceship_position;

@@ -1,4 +1,5 @@
 #include "common.h"
+#include "screens.h"
 
 #include <util/delay.h>
 
@@ -50,54 +51,6 @@ void drawVictory(CH1115Display *display) {
   display->breathingEffect(CH1115_OFF);
   display->contrast(0x01);
   drawStart(display);
-}
-
-// Draws the "High Score" screen
-void drawHighScore(CH1115Display *display, UserScore *highscore, uint8_t size) {
-  const uint8_t ybase = 4;
-  display->drawScreen(0x00, true);
-  display->drawString((SCREEN_WIDTH - 11 * FONT_CHAR_WIDTH)/2, ybase, "High Scores");
-
-  display->drawString(20, ybase + FONT_CHAR_HEIGHT + 4, "1st:");
-  display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + FONT_CHAR_HEIGHT + 4, highscore[0].user);
-  display->drawInt(20 + 12 * FONT_CHAR_WIDTH, ybase + FONT_CHAR_HEIGHT + 4, highscore[0].score);
-  
-  display->drawString(20, ybase + 2 * (FONT_CHAR_HEIGHT + 4), "2nd:");
-  display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + 2 * (FONT_CHAR_HEIGHT + 4), highscore[1].user);
-  display->drawInt(20 + 12 * FONT_CHAR_WIDTH, ybase + 2 * (FONT_CHAR_HEIGHT + 4), highscore[1].score);
-
-  display->drawString(20, ybase + 3 * (FONT_CHAR_HEIGHT + 4), "3rd:");
-  display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + 3 * (FONT_CHAR_HEIGHT + 4), highscore[2].user);
-  display->drawInt(20 + 12 * FONT_CHAR_WIDTH, ybase + 3 * (FONT_CHAR_HEIGHT + 4), highscore[2].score);
-
-  display->drawString(3, 54, "insert coins...");
-  display->scrollArea(6, 7, 2, 120, CH1115_SCROLL_RIGHT, CH1115_SCROLL_6FRAMES);
-  display->scroll(CH1115_SCROLL_CONTINUOUS);
-}
-
-uint32_t prevHighScoreUpdate = 0;
-bool drawName = true;
-
-void updateHighScore(CH1115Display *display, UserScore *highscore, uint8_t size) {
-  const uint8_t ybase = 4;
-  if (UserScore::CurrentUserPos < 0 || UserScore::CurrentUserPos >= size) {
-    // Invalid position, do nothing
-    return;
-  }
-  uint32_t now = milliseconds();
-
-  if (now - prevHighScoreUpdate > 500) {
-    prevHighScoreUpdate = now;
-    drawName = !drawName; // Toggle name drawing every 500 ms
-  }
-
-  if (drawName) {
-    display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + (UserScore::CurrentUserPos + 1) * (FONT_CHAR_HEIGHT + 4), highscore[UserScore::CurrentUserPos].user);
-  } else {
-    display->drawString(20 + (6 + UserScore::CurrentUserCharPos)* FONT_CHAR_WIDTH, ybase + (UserScore::CurrentUserPos + 1) * (FONT_CHAR_HEIGHT + 4), " ");
-  }
-    
-
 }
 
 #define SHOW_PERFORMANCE 1
@@ -158,23 +111,3 @@ void drawScene(CH1115Display *display, bool first) {
   #endif
 }
 
-void drawHighScoreUpdate(CH1115Display *display, UserScore *highscore, uint8_t size, uint8_t pos) {
-  const uint8_t ybase = 4;
-  display->drawScreen(0x00, true);
-  display->drawString((SCREEN_WIDTH - 11 * FONT_CHAR_WIDTH)/2, ybase, "High Scores");
-
-  display->drawString(20, ybase + FONT_CHAR_HEIGHT + 4, "1st:");
-  display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + FONT_CHAR_HEIGHT + 4, highscore[0].user);
-  display->drawInt(20 + 12 * FONT_CHAR_WIDTH, ybase + FONT_CHAR_HEIGHT + 4, highscore[0].score);
-  
-  display->drawString(20, ybase + 2 * (FONT_CHAR_HEIGHT + 4), "2nd:");
-  display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + 2 * (FONT_CHAR_HEIGHT + 4), highscore[1].user);
-  display->drawInt(20 + 12 * FONT_CHAR_WIDTH, ybase + 2 * (FONT_CHAR_HEIGHT + 4), highscore[1].score);
-
-  display->drawString(20, ybase + 3 * (FONT_CHAR_HEIGHT + 4), "3rd:");
-  display->drawString(20 + 6 * FONT_CHAR_WIDTH, ybase + 3 * (FONT_CHAR_HEIGHT + 4), highscore[2].user);
-  display->drawInt(20 + 12 * FONT_CHAR_WIDTH, ybase + 3 * (FONT_CHAR_HEIGHT + 4), highscore[2].score);
-
-  display->drawString(3, 54, "Enter your name");
-  
-}

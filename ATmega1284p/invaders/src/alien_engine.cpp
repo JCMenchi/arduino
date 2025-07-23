@@ -1,46 +1,49 @@
 #include "common.h"
-
 #include "sprites.h"
 #include <CH1115Display.h>
-
 #include <stdlib.h>
-
 #include <highscore.h>
 
+#ifdef HAS_SERIAL
+#include <usart_serial.h>
+#endif
 
-const uint8_t NB_ALIENS_COL = 8;
-const uint8_t NB_ALIEN_ROW = 4;
+// --- Alien configuration constants ---
+const uint8_t NB_ALIENS_COL = 8;      // Number of alien columns
+const uint8_t NB_ALIEN_ROW = 4;       // Number of alien rows
 
-const uint8_t ALIEN_X_MAX_POS = 16;
-const uint8_t ALIEN_Y_MAX_POS = 16;
+const uint8_t ALIEN_X_MAX_POS = 16;   // Max X position for aliens
+const uint8_t ALIEN_Y_MAX_POS = 16;   // Max Y position for aliens
 
-const uint8_t ALIEN_X_SPACING = 15;
-const uint8_t ALIEN_Y_SPACING = 8;
+const uint8_t ALIEN_X_SPACING = 15;   // Horizontal spacing between aliens
+const uint8_t ALIEN_Y_SPACING = 8;    // Vertical spacing between aliens
 
-uint8_t nb_spaceship = MAX_LIFE;
+uint8_t nb_spaceship = MAX_LIFE;      // Number of spaceship lives
 
-uint8_t aliens[NB_ALIENS_COL * NB_ALIEN_ROW];
-uint8_t min_col = 0;
-uint8_t max_col = NB_ALIENS_COL;
-uint8_t min_row = 0;
-uint8_t max_row = NB_ALIEN_ROW;
+// --- Alien state variables ---
+uint8_t aliens[NB_ALIENS_COL * NB_ALIEN_ROW]; // Alien grid state
+uint8_t min_col = 0, max_col = NB_ALIENS_COL; // Active alien columns
+uint8_t min_row = 0, max_row = NB_ALIEN_ROW;  // Active alien rows
 
-uint8_t alien_x_pos = 0;
-uint8_t alien_y_pos = 0;
-uint8_t alien_dx = 1;
+uint8_t alien_x_pos = 0;              // X position of alien group
+uint8_t alien_y_pos = 0;              // Y position of alien group
+uint8_t alien_dx = 1;                 // Alien movement direction (1=right, -1=left)
 
-const uint8_t ALIEN_FRAME_COUNTER = 3;
-uint8_t alien_frame = 0;
+const uint8_t ALIEN_FRAME_COUNTER = 3;// Animation frame counter
+uint8_t alien_frame = 0;              // Current animation frame
 
-uint8_t dont_go_down = 5;
+uint8_t dont_go_down = 5;             // Delay before aliens move down
 
-int8_t alien_missile_state = -1;
+// --- Alien missile state ---
+int8_t alien_missile_state = -1;      // -1: no missile, 1: just fired, 2: moving
+uint8_t alien_x_missile = 0;          // Missile X position
+uint8_t alien_y_missile = 0;          // Missile Y position
 
-uint8_t alien_x_missile = 0;
-uint8_t alien_y_missile = 0;
-
+/**
+ * @brief Update the range of active aliens (min/max rows and columns).
+ *        Used to optimize drawing and movement.
+ */
 void update_alien_range() {
-
   if (alien_missile_state == -1) {
     alien_missile_state = rand() % NB_ALIENS_COL;
   }
@@ -52,7 +55,7 @@ void update_alien_range() {
 
   uint8_t nb = 0;
 
-  // MAX ROW
+  // Find the last non-empty row (max_row)
   for (uint8_t r = NB_ALIEN_ROW - 1; r >= 0; --r) {
     nb = 0;
     for (uint8_t c = 0; c < NB_ALIENS_COL; ++c) {
@@ -66,7 +69,7 @@ void update_alien_range() {
     }
   }
 
-  // MIN ROW
+  // Find the first non-empty row (min_row)
   for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
     nb = 0;
     for (uint8_t c = 0; c < NB_ALIENS_COL; ++c) {
@@ -80,6 +83,7 @@ void update_alien_range() {
     }
   }
 
+  // Find the last non-empty column (max_col)
   for (uint8_t c = NB_ALIENS_COL - 1; c >= 0; --c) {
     nb = 0;
     for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
@@ -93,6 +97,7 @@ void update_alien_range() {
     }
   }
 
+  // Find the first non-empty column (min_col)
   for (uint8_t c = 0; c < NB_ALIENS_COL; ++c) {
     nb = 0;
     for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
@@ -105,11 +110,16 @@ void update_alien_range() {
       break;
     }
   }
-
 }
 
+/**
+ * @brief Handle what happens when an alien missile hits something (e.g., shelter).
+ * @param x X position of impact
+ * @param ymin Minimum Y of impact
+ * @param ymax Maximum Y of impact
+ * @param display Pointer to display object
+ */
 void alien_hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display) {
-
   if ((ymin <= 55 && ymin >= 48) || (ymax <= 55 && ymax >= 48)) {
     // Hit shelter
     alien_missile_state = -1;
@@ -119,11 +129,15 @@ void alien_hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *d
     display->updatePageColumn(0x00, OVERWRITE_MODE);
     display->endPageDrawing();
   }
-
 }
 
+/**
+ * @brief Erase the previous alien missile from the display.
+ * @param x X position
+ * @param y Y position
+ * @param display Pointer to display object
+ */
 void clear_alien_missile(uint8_t x, uint8_t y, CH1115Display *display) {
-  // erase previous missile
   uint8_t missile_pattern = 0xF0;
   uint8_t shift = alien_y_missile % 8;
   if (shift == 7) {
@@ -131,12 +145,18 @@ void clear_alien_missile(uint8_t x, uint8_t y, CH1115Display *display) {
   } else if (shift == 3) {
     missile_pattern = 0x0F;
   }
-
   display->startPageDrawing(x, y);
   display->updatePageColumn(0x00, OVERWRITE_MODE, missile_pattern);
   display->endPageDrawing();
 }
 
+/**
+ * @brief Draw the alien missile at its current position.
+ * @param x X position
+ * @param y Y position
+ * @param display Pointer to display object
+ * @return Previous pixel data (for collision)
+ */
 uint8_t draw_alien_missile(uint8_t x, uint8_t y, CH1115Display *display) {
     uint8_t missile_pattern = 0xF0;
     uint8_t shift = alien_y_missile % 8;
@@ -154,8 +174,12 @@ uint8_t draw_alien_missile(uint8_t x, uint8_t y, CH1115Display *display) {
     return prev;
 }
 
+/**
+ * @brief Main update function for aliens: draws, moves, animates, and handles missiles.
+ * @param display Pointer to display object
+ */
 void do_update_alien(CH1115Display *display) {
-  // draw aliens
+  // Draw all aliens in their current positions
   for (uint8_t r = 0; r < max_row; r++) {
     for (uint8_t i = min_col; i < max_col; i++) {
       const uint8_t *sprite = empty;
@@ -183,7 +207,7 @@ void do_update_alien(CH1115Display *display) {
     }
   }
 
-  // move alien
+  // Move aliens horizontally and vertically as needed
   if (alien_x_pos >= (128 - ((max_col - min_col) * (ALIEN_X_SPACING)))) {
     alien_dx = -1;
     dont_go_down--;
@@ -196,7 +220,7 @@ void do_update_alien(CH1115Display *display) {
   }
   alien_x_pos += alien_dx;
 
-  // check explosion
+  // Handle alien explosions and update range if needed
   uint8_t prev_min_col = min_col;
   for (uint8_t i = 0; i < NB_ALIENS_COL * NB_ALIEN_ROW; ++i) {
     if (aliens[i] >= 3) {
@@ -204,7 +228,6 @@ void do_update_alien(CH1115Display *display) {
     }
     if (aliens[i] == 8) {
       aliens[i] = 0;
-      // end explosion update range
       update_alien_range();
     }
   }
@@ -213,9 +236,8 @@ void do_update_alien(CH1115Display *display) {
   }
 
   // --- Alien missile logic ---
-  // If no missile, randomly fire one
+  // If no missile, randomly fire one from a living alien in the bottom row
   if (alien_missile_state == -1 && (rand() % 5 == 0)) { // 1/5 chance per frame
-    // Find a random alien in bottom row that is alive
     uint8_t candidates_col[NB_ALIENS_COL];
     uint8_t candidates_row[NB_ALIENS_COL];
     uint8_t count = 0;
@@ -254,6 +276,7 @@ void do_update_alien(CH1115Display *display) {
       alien_hit_something(alien_x_missile, alien_y_missile-3, alien_y_missile, display);
     }
 
+    // Check collision with spaceship
     if (alien_y_missile >= 56 && alien_x_missile < x_spaceship_position + SPRITE_WIDTH && alien_x_missile > x_spaceship_position) {
       // Hit spaceship
       alien_missile_state = -1;
@@ -272,11 +295,12 @@ void do_update_alien(CH1115Display *display) {
       alien_missile_state = -1;
     }
   }
-
 }
 
-
-
+/**
+ * @brief Call this function every frame to update aliens (with animation timing).
+ * @param display Pointer to display object
+ */
 void update_alien(CH1115Display *display) {
   if (alien_frame == 0) {
     do_update_alien(display);
@@ -285,6 +309,10 @@ void update_alien(CH1115Display *display) {
   alien_frame--;
 }
 
+/**
+ * @brief Move the alien group in a given direction or reset their position.
+ * @param direction MOVE_INIT, MOVE_UP, MOVE_DOWN
+ */
 void move_alien(uint8_t direction) {
   if (direction == MOVE_INIT) {
     min_col = 0;
@@ -296,6 +324,7 @@ void move_alien(uint8_t direction) {
     alien_dx = 1;
     alien_frame = 0;
 
+    // Initialize aliens: top 2 rows type 2, bottom 2 rows type 1
     for (uint8_t row = 0; row < NB_ALIEN_ROW; ++row) {
       for (uint8_t col = 0; col < NB_ALIENS_COL; ++col) {
         aliens[col + row * NB_ALIENS_COL] = (row < 2) ? 2 : 1;
@@ -312,6 +341,12 @@ void move_alien(uint8_t direction) {
   }
 }
 
+/**
+ * @brief Attempt to kill an alien at the given screen position.
+ * @param x X position
+ * @param y Y position
+ * @return true if an alien was killed, false otherwise
+ */
 bool kill_alien(uint8_t x, uint8_t y) {
   uint8_t col = (x - alien_x_pos) / ALIEN_X_SPACING + min_col;
   uint8_t row = (y - alien_y_pos) / ALIEN_Y_SPACING;
@@ -333,6 +368,10 @@ bool kill_alien(uint8_t x, uint8_t y) {
   return false;
 }
 
+/**
+ * @brief Check the current status of the aliens (win/lose/continue).
+ * @return ALIEN_LOST if all aliens are dead, ALIEN_WIN if player lost, 0 otherwise
+ */
 uint8_t check_alien_status() {
   // count remaining aliens
   uint8_t nb = 0;

@@ -14,6 +14,7 @@
 #include "TinyI2CMaster.h"
 #include "common.h"
 #include "sound.h"
+#include "screens.h"
 
 //#define READ_SERIAL_LINE 1
 
@@ -197,7 +198,6 @@ bool joystick_interpretor(Nunchuk *joystick, bool changed) {
     } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->z_button()) {
         USART_WriteString("Validate High Score username\n");
         UserScore_saveEEPROM(highscore, 3);
-        UserScore::CurrentScore = 0;
         UserScore::CurrentUserPos = -1;
         UserScore::CurrentUserCharPos = -1;
         _delay_ms(50);
