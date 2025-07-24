@@ -15,6 +15,8 @@
 #include "common.h"
 #include "sound.h"
 #include "screens.h"
+#include <alien_engine.h>
+#include <spaceship_engine.h>
 
 //#define READ_SERIAL_LINE 1
 

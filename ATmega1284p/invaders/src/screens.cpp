@@ -5,11 +5,17 @@
 
 #include <sound.h>
 #include <millisec.h>
-#include <usart_serial.h>
 #include <CH1115Display.h>
 
 #include <highscore.h>
 #include <bitmap_font.h>
+
+#include <spaceship_engine.h>
+#include <alien_engine.h>
+
+#ifdef HAS_SERIAL
+#include <usart_serial.h>
+#endif
 
 // Draws the "Game Over" screen with scrolling text effect.
 void drawGameOver(CH1115Display *display) {
@@ -95,18 +101,22 @@ void drawScene(CH1115Display *display, bool first) {
   if (fps_start_time == 0) {
     fps_start_time = start;
   } else if ((end - fps_start_time) > 10000) {
+    #ifdef HAS_SERIAL
     USART_WriteString("FPS: ");
     USART_WriteInt(((fps_nb_frame * 1000) / (end - fps_start_time)));
     USART_WriteString("\n");
+    #endif
 
     fps_start_time = 0;
     fps_nb_frame = 0;
   }
 
   if ((end - start) > 190) {
+    #ifdef HAS_SERIAL
     USART_WriteString("Frame refresh in (ms): ");
     USART_WriteInt(end - start);
     USART_WriteString("\n");
+    #endif
   }
   #endif
 }

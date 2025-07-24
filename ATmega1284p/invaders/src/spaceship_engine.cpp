@@ -3,10 +3,13 @@
 #include "common.h"
 #include "sound.h"
 #include "sprites.h"
+#include <spaceship_engine.h>
+#include <alien_engine.h>
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif
+
 
 uint8_t nb_spaceship = MAX_LIFE;  // Number of spaceship lives
 

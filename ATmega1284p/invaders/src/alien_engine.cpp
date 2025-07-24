@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <highscore.h>
 
+#include <spaceship_engine.h>
+#include <alien_engine.h>
+
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif

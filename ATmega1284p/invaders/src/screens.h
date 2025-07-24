@@ -7,4 +7,7 @@ void drawGameOver(CH1115Display *display);
 void drawStart(CH1115Display *display);
 void drawVictory(CH1115Display *display);
 
+void drawScene(CH1115Display *display, bool first);
+
+
 #endif

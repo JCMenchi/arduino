@@ -2,6 +2,9 @@
 #define _HIGHSCORE_H
 
 #include <stddef.h>
+#include <stdint.h>
+
+class CH1115Display;
 
 // Magic number to identify invaders high score data in EEPROM
 const uint16_t INVADERS_TYPE=0xDECA;
