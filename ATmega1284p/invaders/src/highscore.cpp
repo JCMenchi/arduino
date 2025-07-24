@@ -1,23 +1,30 @@
-
-#include <common.h>
-#include <highscore.h>
 #include <CH1115Display.h>
 #include <bitmap_font.h>
 #include <millisec.h>
 
+#include <common.h>
+#include <highscore.h>
+
 #include <avr/eeprom.h>
 
+// If HAS_SERIAL is defined, include USART serial support for debugging output.
+// This allows sending debug/status messages over the serial port.
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif
 
+// Static variables to track the current score and user editing state.
 uint32_t UserScore::CurrentScore = 0;
 int8_t UserScore::CurrentUserPos = -1;
 int8_t UserScore::CurrentUserCharPos = -1;
 
+// Constants for EEPROM storage layout.
 const uint8_t UserScoreSize = 5;
 const uint8_t UserScoreStoreStartOffset = 4;
 
+// Initialize the high score table in EEPROM.
+// If the EEPROM marker matches INVADERS_TYPE, load existing scores.
+// Otherwise, initialize EEPROM with default scores and marker.
 void UserScore_initEEPROM(UserScore *highscore, size_t nbscore) {
     uint16_t marker = eeprom_read_word((uint16_t *)2);
     if (marker == INVADERS_TYPE) {
@@ -39,6 +46,8 @@ void UserScore_initEEPROM(UserScore *highscore, size_t nbscore) {
     }
 }
 
+// Save the current high scores to EEPROM.
+// Update the EEPROM marker and store each high score entry.
 void UserScore_saveEEPROM(UserScore *highscore, size_t nbscore) {
 #ifdef HAS_SERIAL
     USART_WriteString("Save EEPROM.\n");
@@ -49,6 +58,8 @@ void UserScore_saveEEPROM(UserScore *highscore, size_t nbscore) {
     }
 }
 
+// Display the user's score and name over USART serial.
+// This is used for debugging and monitoring the high scores.
 void UserScore::display() {
     #ifdef HAS_SERIAL
     USART_WriteString("User: ");
@@ -59,6 +70,10 @@ void UserScore::display() {
     #endif
   }
 
+// Store the user's score and name in EEPROM.
+// The data is stored at the given offset, with the format:
+// - 2 bytes for the score (uint16_t)
+// - 3 bytes for the user name (char[3])
 void UserScore::store(uint16_t offset) {
     eeprom_update_word((uint16_t *)offset, score);
     eeprom_update_byte((uint8_t *)(offset + 2), user[0]);
@@ -66,6 +81,10 @@ void UserScore::store(uint16_t offset) {
     eeprom_update_byte((uint8_t *)(offset + 4), user[2]);
 }
 
+// Load the user's score and name from EEPROM.
+// The data is read from the given offset, with the format:
+// - 2 bytes for the score (uint16_t)
+// - 3 bytes for the user name (char[3])
 void UserScore::load(uint16_t offset) {
     score = eeprom_read_word((uint16_t *)offset);
     user[0] = eeprom_read_byte((uint8_t *)(offset + 2));
@@ -97,6 +116,9 @@ int8_t UserScore::UpdateHighScore(UserScore *scores, uint8_t nbscore, uint32_t n
     return pos;
 }
 
+// Update the user name in the high score table.
+// Allows moving left/right to change character position,
+// and up/down to change the character itself.
 void UserScore::UpdateUserName(UserScore *scores, uint8_t nbscore, uint8_t direction) {
     if (direction == MOVE_RIGHT) {
         if (CurrentUserCharPos < 2) {
@@ -157,6 +179,8 @@ void drawHighScore(CH1115Display *display, UserScore *highscore, uint8_t nbscore
 uint32_t prevHighScoreUpdate = 0;
 bool drawName = true;
 
+// Update the high score display, blinking the current user's name.
+// The name blinks every 500 ms to indicate where the user is editing.
 void updateHighScore(CH1115Display *display, UserScore *highscore, uint8_t nbscore) {
   const uint8_t ybase = 4;
   if (UserScore::CurrentUserPos < 0 || UserScore::CurrentUserPos >= nbscore) {
@@ -177,6 +201,8 @@ void updateHighScore(CH1115Display *display, UserScore *highscore, uint8_t nbsco
   }
 }
 
+// Draw the high score update screen.
+// This shows the high scores and prompts the user to enter their name.
 void drawHighScoreUpdate(CH1115Display *display, UserScore *highscore, uint8_t size, uint8_t pos) {
   const uint8_t ybase = 4;
   display->drawScreen(0x00, true);

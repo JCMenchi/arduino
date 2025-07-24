@@ -1,9 +1,10 @@
-#include "common.h"
-#include "sprites.h"
-#include <CH1115Display.h>
 #include <stdlib.h>
-#include <highscore.h>
 
+#include <CH1115Display.h>
+
+#include <common.h>
+#include <sprites.h>
+#include <highscore.h>
 #include <spaceship_engine.h>
 #include <alien_engine.h>
 
@@ -237,7 +238,7 @@ void do_update_alien(CH1115Display *display) {
 
   // --- Alien missile logic ---
   // If no missile, randomly fire one from a living alien in the bottom row
-  if (alien_missile_state == -1 && (rand() % 3 == 0)) { // 1/3 chance per frame
+  if (alien_missile_state == -1 && (rand() % 2  == 0)) { // 1/2 chance per frame
     uint8_t candidates_col[NB_ALIEN_COL];
     uint8_t candidates_row[NB_ALIEN_COL];
     uint8_t count = 0;

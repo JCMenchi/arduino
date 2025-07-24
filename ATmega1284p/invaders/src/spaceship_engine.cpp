@@ -1,8 +1,8 @@
 #include <CH1115Display.h>
+#include <sound.h>
 
-#include "common.h"
-#include "sound.h"
-#include "sprites.h"
+#include <common.h>
+#include <sprites.h>
 #include <spaceship_engine.h>
 #include <alien_engine.h>
 
@@ -10,20 +10,25 @@
 #include <usart_serial.h>
 #endif
 
+// Number of spaceship lives
+uint8_t nb_spaceship = MAX_LIFE;
 
-uint8_t nb_spaceship = MAX_LIFE;  // Number of spaceship lives
-
+// State of the missile: 0 = not fired, 1 = in flight
 uint8_t missile_state = 0;
 
+// Missile position
 uint8_t x_missile = 0;
 uint8_t y_missile = 0;
 
+// Spaceship position (horizontal)
 uint8_t x_spaceship_position = 64;
 uint8_t x_prev_position = 64;
 
+// Sound sequence for firing
 const int16_t fire_sound[] = {NOTE_G4, NOTE_G5, NOTE_G6, 0};
 uint8_t fire_sound_pos = 0;
 
+// Move the spaceship left, right, or initialize its position
 void move_spaceship(uint8_t direction) {
     x_prev_position = x_spaceship_position;
 
@@ -58,6 +63,7 @@ void move_spaceship(uint8_t direction) {
     }
 }
 
+// Handle spaceship actions (e.g., firing missile)
 void spaceship_action(uint8_t action) {
     if (action == GUNFIRE_ACTION && missile_state == 0) {
         playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_G4, 35);
@@ -67,6 +73,7 @@ void spaceship_action(uint8_t action) {
     }
 }
 
+// Handle missile collision with shelter or alien
 void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display) {
     if ((ymin <= 55 && ymin >= 48) || (ymax <= 55 && ymax >= 48)) {
         // Hit shelter
@@ -80,6 +87,7 @@ void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display
         display->updatePageColumn(0x00, OVERWRITE_MODE);
         display->endPageDrawing();
     } else {
+        // Check if hit alien
         bool k = kill_alien(x, ymin) || kill_alien(x, ymax);
         if (k) {
             stopNote();
@@ -91,6 +99,7 @@ void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display
     }
 }
 
+// Draw the missile at given position
 uint8_t draw_missile(uint8_t x, uint8_t y, CH1115Display *display) {
     uint8_t missile_pattern = 0xF0;
     uint8_t shift = y_missile % 8;
@@ -108,6 +117,7 @@ uint8_t draw_missile(uint8_t x, uint8_t y, CH1115Display *display) {
     return prev;
 }
 
+// Erase the missile from previous position
 void clear_missile(uint8_t x, uint8_t y, CH1115Display *display) {
     // erase previous missile
     uint8_t missile_pattern = 0xF0;
@@ -123,6 +133,7 @@ void clear_missile(uint8_t x, uint8_t y, CH1115Display *display) {
     display->endPageDrawing();
 }
 
+// Update missile position and handle collisions
 void update_missile(CH1115Display *display) {
     if (y_missile != 0) {
         // erase previous missile
@@ -148,6 +159,7 @@ void update_missile(CH1115Display *display) {
     }
 }
 
+// Draw spaceship and update missile if needed
 void update_spaceship(CH1115Display *display) {
     display->drawSprite(x_spaceship_position, 56, SPRITE_WIDTH, SPRITE_HEIGHT, spaceship,
                         OVERWRITE_MODE);
@@ -156,6 +168,7 @@ void update_spaceship(CH1115Display *display) {
     }
 }
 
+// Draw all shelters on the screen
 void draw_shelter(CH1115Display *display) {
     display->drawSprite(16, 48, SHELTER_WIDTH, SPRITE_HEIGHT, shelter,
                         OVERWRITE_MODE);
@@ -165,4 +178,5 @@ void draw_shelter(CH1115Display *display) {
                         shelter, OVERWRITE_MODE);
 }
 
+// Check spaceship status (stub, always returns 0)
 uint8_t check_spaceship_status() { return 0; }

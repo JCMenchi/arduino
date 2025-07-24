@@ -98,7 +98,7 @@ struct UserScore {
 };
 
 /**
- * @brief Draws the high score table on the display.
+ * @brief Draws the high score table on the OLED screen.
  */
 void drawHighScore(CH1115Display *display, UserScore *highscore, uint8_t nbscore);
 

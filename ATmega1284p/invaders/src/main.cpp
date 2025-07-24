@@ -1,22 +1,25 @@
 
-
-#include <CH1115Display.h>
-#include <bitmap_font.h>
-#include <highscore.h>
-#include <millisec.h>
-#include <nunchuk.h>
 #include <stdlib.h>
 #include <string.h>
-#include <usart_serial.h>
 #include <util/atomic.h>
 #include <util/delay.h>
 
-#include "TinyI2CMaster.h"
-#include "common.h"
-#include "sound.h"
-#include "screens.h"
+#include <TinyI2CMaster.h>
+#include <nunchuk.h>
+#include <CH1115Display.h>
+#include <bitmap_font.h>
+#include <sound.h>
+#include <millisec.h>
+
+#include <common.h>
+#include <highscore.h>
+#include <screens.h>
 #include <alien_engine.h>
 #include <spaceship_engine.h>
+
+#ifdef HAS_SERIAL
+#include <usart_serial.h>
+#endif
 
 //#define READ_SERIAL_LINE 1
 
@@ -169,46 +172,69 @@ void changeToVictory(uint32_t now) {
     drawVictory(&ch1115);
 }
 
+// Process joystick input based on current screen mode and state
+// Returns true if input was processed, false otherwise
 bool joystick_interpretor(Nunchuk *joystick, bool changed) {
+    // Handle starting new game from init or high score screens
     if (changed && (screen_mode == INIT_SCREEN || screen_mode == HIGH_SCORE_SCREEN) && joystick->c_button()) {
         screen_mode = GAME_SCREEN;
         UserScore::CurrentScore = 0;
         drawScene(&ch1115, true);
         joystick->display();
         return true;
-    } else if (screen_mode == GAME_SCREEN && joystick->z_button()) {
+    } 
+    // Handle spaceship firing during gameplay
+    else if (screen_mode == GAME_SCREEN && joystick->z_button()) {
         spaceship_action(GUNFIRE_ACTION);
         return true;
-    } else if (screen_mode == GAME_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + JOYSTICK_THRESHOLD) {
+    }
+    // Handle spaceship movement right during gameplay  
+    else if (screen_mode == GAME_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + JOYSTICK_THRESHOLD) {
         move_spaceship(MOVE_RIGHT);
         return true;
-    } else if (screen_mode == GAME_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - JOYSTICK_THRESHOLD) {
+    }
+    // Handle spaceship movement left during gameplay
+    else if (screen_mode == GAME_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - JOYSTICK_THRESHOLD) {
         move_spaceship(MOVE_LEFT);
         return true;
-    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() > joystick->joystick_y_center() + 4 * JOYSTICK_THRESHOLD) {
+    }
+    // Handle high score name entry - move character up
+    else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() > joystick->joystick_y_center() + 4 * JOYSTICK_THRESHOLD) {
         UserScore::UpdateUserName(highscore, 3, MOVE_UP);
         return true;
-    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() < joystick->joystick_y_center() - 4 * JOYSTICK_THRESHOLD) {
+    }
+    // Handle high score name entry - move character down
+    else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_y() < joystick->joystick_y_center() - 4 * JOYSTICK_THRESHOLD) {
         UserScore::UpdateUserName(highscore, 3, MOVE_DOWN);
         return true;
-    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + 6 * JOYSTICK_THRESHOLD) {
+    }
+    // Handle high score name entry - move cursor right
+    else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() > joystick->joystick_x_center() + 6 * JOYSTICK_THRESHOLD) {
         UserScore::UpdateUserName(highscore, 3, MOVE_RIGHT);
         return true;
-    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - 6 * JOYSTICK_THRESHOLD) {
+    }
+    // Handle high score name entry - move cursor left
+    else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->joystick_x() < joystick->joystick_x_center() - 6 * JOYSTICK_THRESHOLD) {
         UserScore::UpdateUserName(highscore, 3, MOVE_LEFT);
         return true;
-    } else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->z_button()) {
+    }
+    // Handle high score name entry completion and save
+    else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->z_button()) {
         USART_WriteString("Validate High Score username\n");
+        // Save high score to EEPROM
         UserScore_saveEEPROM(highscore, 3);
+        // Reset user position tracking
         UserScore::CurrentUserPos = -1;
         UserScore::CurrentUserCharPos = -1;
         _delay_ms(50);
+        // Return to init screen
         changeToInit(milliseconds());
         _delay_ms(50);
         joystick->update();
         return true;
     }
 
+    // No input was processed
     return false;
 }
 
@@ -268,6 +294,8 @@ void gameloop() {
                 UserScore_saveEEPROM(highscore, 3);
             } else {
                 changeToInit(now);
+                _delay_ms(50);
+                joystick.update();
             }
         }
     }
