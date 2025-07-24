@@ -38,7 +38,6 @@ uint8_t check_alien_status();
 
 void drawScene(CH1115Display *display, bool first);
 
-
 extern uint8_t x_spaceship_position;
 
 const uint8_t MAX_LIFE = 1;

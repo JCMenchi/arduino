@@ -9,7 +9,7 @@
 #endif
 
 // --- Alien configuration constants ---
-const uint8_t NB_ALIENS_COL = 8;      // Number of alien columns
+const uint8_t NB_ALIEN_COL = 8;      // Number of alien columns
 const uint8_t NB_ALIEN_ROW = 4;       // Number of alien rows
 
 const uint8_t ALIEN_X_MAX_POS = 16;   // Max X position for aliens
@@ -18,16 +18,14 @@ const uint8_t ALIEN_Y_MAX_POS = 16;   // Max Y position for aliens
 const uint8_t ALIEN_X_SPACING = 15;   // Horizontal spacing between aliens
 const uint8_t ALIEN_Y_SPACING = 8;    // Vertical spacing between aliens
 
-uint8_t nb_spaceship = MAX_LIFE;      // Number of spaceship lives
-
 // --- Alien state variables ---
-uint8_t aliens[NB_ALIENS_COL * NB_ALIEN_ROW]; // Alien grid state
-uint8_t min_col = 0, max_col = NB_ALIENS_COL; // Active alien columns
+uint8_t aliens[NB_ALIEN_COL * NB_ALIEN_ROW]; // Alien grid state
+uint8_t min_col = 0, max_col = NB_ALIEN_COL; // Active alien columns
 uint8_t min_row = 0, max_row = NB_ALIEN_ROW;  // Active alien rows
 
 uint8_t alien_x_pos = 0;              // X position of alien group
 uint8_t alien_y_pos = 0;              // Y position of alien group
-uint8_t alien_dx = 1;                 // Alien movement direction (1=right, -1=left)
+int8_t alien_dx = 1;                 // Alien movement direction (1=right, -1=left)
 
 const uint8_t ALIEN_FRAME_COUNTER = 3;// Animation frame counter
 uint8_t alien_frame = 0;              // Current animation frame
@@ -44,12 +42,8 @@ uint8_t alien_y_missile = 0;          // Missile Y position
  *        Used to optimize drawing and movement.
  */
 void update_alien_range() {
-  if (alien_missile_state == -1) {
-    alien_missile_state = rand() % NB_ALIENS_COL;
-  }
-
   min_col = 0;
-  max_col = NB_ALIENS_COL;
+  max_col = NB_ALIEN_COL;
   min_row = 0;
   max_row = NB_ALIEN_ROW;
 
@@ -58,8 +52,8 @@ void update_alien_range() {
   // Find the last non-empty row (max_row)
   for (uint8_t r = NB_ALIEN_ROW - 1; r >= 0; --r) {
     nb = 0;
-    for (uint8_t c = 0; c < NB_ALIENS_COL; ++c) {
-      if (aliens[c + r * NB_ALIENS_COL])
+    for (uint8_t c = 0; c < NB_ALIEN_COL; ++c) {
+      if (aliens[c + r * NB_ALIEN_COL])
         nb++;
     }
     if (nb == 0) {
@@ -72,8 +66,8 @@ void update_alien_range() {
   // Find the first non-empty row (min_row)
   for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
     nb = 0;
-    for (uint8_t c = 0; c < NB_ALIENS_COL; ++c) {
-      if (aliens[c + r * NB_ALIENS_COL])
+    for (uint8_t c = 0; c < NB_ALIEN_COL; ++c) {
+      if (aliens[c + r * NB_ALIEN_COL])
         nb++;
     }
     if (nb == 0) {
@@ -84,10 +78,10 @@ void update_alien_range() {
   }
 
   // Find the last non-empty column (max_col)
-  for (uint8_t c = NB_ALIENS_COL - 1; c >= 0; --c) {
+  for (uint8_t c = NB_ALIEN_COL - 1; c >= 0; --c) {
     nb = 0;
     for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
-      if (aliens[c + r * NB_ALIENS_COL])
+      if (aliens[c + r * NB_ALIEN_COL])
         nb++;
     }
     if (nb == 0) {
@@ -98,10 +92,10 @@ void update_alien_range() {
   }
 
   // Find the first non-empty column (min_col)
-  for (uint8_t c = 0; c < NB_ALIENS_COL; ++c) {
+  for (uint8_t c = 0; c < NB_ALIEN_COL; ++c) {
     nb = 0;
     for (uint8_t r = 0; r < NB_ALIEN_ROW; ++r) {
-      if (aliens[c + r * NB_ALIENS_COL])
+      if (aliens[c + r * NB_ALIEN_COL])
         nb++;
     }
     if (nb == 0) {
@@ -121,6 +115,9 @@ void update_alien_range() {
  */
 void alien_hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display) {
   if ((ymin <= 55 && ymin >= 48) || (ymax <= 55 && ymax >= 48)) {
+    #ifdef HAS_SERIAL
+    USART_WriteString("Alien missile hit shelter\n");
+    #endif
     // Hit shelter
     alien_missile_state = -1;
     display->startPageDrawing(x - 1, 48);
@@ -180,22 +177,22 @@ uint8_t draw_alien_missile(uint8_t x, uint8_t y, CH1115Display *display) {
  */
 void do_update_alien(CH1115Display *display) {
   // Draw all aliens in their current positions
-  for (uint8_t r = 0; r < max_row; r++) {
-    for (uint8_t i = min_col; i < max_col; i++) {
+  for (int8_t r = min_row; r < max_row; r++) {
+    for (int8_t i = min_col; i < max_col; i++) {
       const uint8_t *sprite = empty;
-      if (aliens[i + r * NB_ALIENS_COL] == 1) {
+      if (aliens[i + r * NB_ALIEN_COL] == 1) {
         sprite = alien;
-      } else if (aliens[i + r * NB_ALIENS_COL] == 2) {
+      } else if (aliens[i + r * NB_ALIEN_COL] == 2) {
         sprite = alien2;
-      } else if (aliens[i + r * NB_ALIENS_COL] == 3) {
+      } else if (aliens[i + r * NB_ALIEN_COL] == 3) {
         sprite = explosion_frames;
-      } else if (aliens[i + r * NB_ALIENS_COL] == 4) {
+      } else if (aliens[i + r * NB_ALIEN_COL] == 4) {
         sprite = explosion_frames + SPRITE_WIDTH;
-      } else if (aliens[i + r * NB_ALIENS_COL] == 5) {
+      } else if (aliens[i + r * NB_ALIEN_COL] == 5) {
         sprite = explosion_frames + 2 * SPRITE_WIDTH;
-      } else if (aliens[i + r * NB_ALIENS_COL] == 6) {
+      } else if (aliens[i + r * NB_ALIEN_COL] == 6) {
         sprite = explosion_frames + 3 * SPRITE_WIDTH;
-      } else if (aliens[i + r * NB_ALIENS_COL] == 7) {
+      } else if (aliens[i + r * NB_ALIEN_COL] == 7) {
         sprite = empty;
       }
 
@@ -222,7 +219,7 @@ void do_update_alien(CH1115Display *display) {
 
   // Handle alien explosions and update range if needed
   uint8_t prev_min_col = min_col;
-  for (uint8_t i = 0; i < NB_ALIENS_COL * NB_ALIEN_ROW; ++i) {
+  for (uint8_t i = 0; i < NB_ALIEN_COL * NB_ALIEN_ROW; ++i) {
     if (aliens[i] >= 3) {
       aliens[i] += 1;
     }
@@ -237,24 +234,32 @@ void do_update_alien(CH1115Display *display) {
 
   // --- Alien missile logic ---
   // If no missile, randomly fire one from a living alien in the bottom row
-  if (alien_missile_state == -1 && (rand() % 5 == 0)) { // 1/5 chance per frame
-    uint8_t candidates_col[NB_ALIENS_COL];
-    uint8_t candidates_row[NB_ALIENS_COL];
+  if (alien_missile_state == -1 && (rand() % 3 == 0)) { // 1/3 chance per frame
+    uint8_t candidates_col[NB_ALIEN_COL];
+    uint8_t candidates_row[NB_ALIEN_COL];
     uint8_t count = 0;
-    for (uint8_t col = min_col; col < max_col; col++) {
-      for (uint8_t r = max_row - 1; r >= 0; r--) {
-        if (aliens[col + r * NB_ALIENS_COL] == 1 || aliens[col + r * NB_ALIENS_COL] == 2) {
-          candidates_col[count++] = col;
-          candidates_row[count++] = r;
+    for (int8_t col = min_col; col < max_col; col++) {
+      for (int8_t r = max_row - 1; r >= 0; r--) {
+        if (aliens[col + r * NB_ALIEN_COL] == 1 || aliens[col + r * NB_ALIEN_COL] == 2) {
+          candidates_col[count] = col;
+          candidates_row[count] = r;
+          count++;
           break; // Only need one from this column
         }
       }
     }
     if (count > 0) {
-      uint8_t chosen = rand() % count;
+      uint8_t chosen = (count > 1)?(rand() % count):0;
       alien_missile_state = 1;
       alien_x_missile = alien_x_pos + (candidates_col[chosen] - min_col) * ALIEN_X_SPACING + SPRITE_WIDTH / 2;
-      alien_y_missile = ((alien_y_pos + candidates_row[chosen] * ALIEN_Y_SPACING + SPRITE_HEIGHT) / 8) * 8; // Align to 8px grid
+      alien_y_missile = ((alien_y_pos + candidates_row[chosen] * ALIEN_Y_SPACING + SPRITE_HEIGHT) / 4) * 4; // Align to 4px grid
+      #ifdef HAS_SERIAL
+      USART_WriteString("Alien create missile at: ");
+      USART_WriteInt(alien_x_missile);
+      USART_WriteString(", ");
+      USART_WriteInt(alien_y_missile);
+      USART_WriteString("\n");
+      #endif
     }
   }
 
@@ -273,11 +278,35 @@ void do_update_alien(CH1115Display *display) {
     uint8_t prev = draw_alien_missile(alien_x_missile, alien_y_missile, display);
     
     if (prev != 0) {
+      #ifdef HAS_SERIAL
+      USART_WriteString("Alien missile hit at: ");
+      USART_WriteInt(alien_x_missile);
+      USART_WriteString(", ");
+      USART_WriteInt(alien_y_missile);
+      USART_WriteString("\n");
+      #endif
       alien_hit_something(alien_x_missile, alien_y_missile-3, alien_y_missile, display);
     }
-
+    // Check if missile is off screen
+    if (alien_y_missile >= 60) { // Assuming 64px screen height
+      alien_y_missile = 60; // Cap it to 60, to be safe
+      clear_alien_missile(alien_x_missile, alien_y_missile, display);
+      alien_missile_state = -1;
+    }
     // Check collision with spaceship
     if (alien_y_missile >= 56 && alien_x_missile < x_spaceship_position + SPRITE_WIDTH && alien_x_missile > x_spaceship_position) {
+      #ifdef HAS_SERIAL
+      USART_WritePString(PSTR("Alien missile hit spaceship at: "));
+      USART_WriteInt(alien_x_missile);
+      USART_WriteString(", ");
+      USART_WriteInt(alien_y_missile);
+      USART_WriteString(" ship pos: ");
+      USART_WriteInt(x_spaceship_position);
+      USART_WriteString(" prev: ");
+      USART_WriteInt(prev, 16);
+      
+      USART_WriteString("\n");
+      #endif
       // Hit spaceship
       alien_missile_state = -1;
       if (nb_spaceship > 0) {
@@ -289,11 +318,7 @@ void do_update_alien(CH1115Display *display) {
         }
       }
     }
-    // Check if missile is off screen
-    if (alien_y_missile > 63) { // Assuming 64px screen height
-      clear_alien_missile(alien_x_missile, alien_y_missile, display);
-      alien_missile_state = -1;
-    }
+    
   }
 }
 
@@ -316,7 +341,7 @@ void update_alien(CH1115Display *display) {
 void move_alien(uint8_t direction) {
   if (direction == MOVE_INIT) {
     min_col = 0;
-    max_col = NB_ALIENS_COL;
+    max_col = NB_ALIEN_COL;
     min_row = 0;
     max_row = NB_ALIEN_ROW;
     alien_x_pos = 0;
@@ -326,8 +351,8 @@ void move_alien(uint8_t direction) {
 
     // Initialize aliens: top 2 rows type 2, bottom 2 rows type 1
     for (uint8_t row = 0; row < NB_ALIEN_ROW; ++row) {
-      for (uint8_t col = 0; col < NB_ALIENS_COL; ++col) {
-        aliens[col + row * NB_ALIENS_COL] = (row < 2) ? 2 : 1;
+      for (uint8_t col = 0; col < NB_ALIEN_COL; ++col) {
+        aliens[col + row * NB_ALIEN_COL] = (row < 2) ? 2 : 1;
       }
     }
   } else if (direction == MOVE_UP) {
@@ -351,14 +376,14 @@ bool kill_alien(uint8_t x, uint8_t y) {
   uint8_t col = (x - alien_x_pos) / ALIEN_X_SPACING + min_col;
   uint8_t row = (y - alien_y_pos) / ALIEN_Y_SPACING;
 
-  if (col < NB_ALIENS_COL && row < NB_ALIEN_ROW) {
+  if (col < NB_ALIEN_COL && row < NB_ALIEN_ROW) {
     // check if it is an explosion and skip it
-    if (aliens[col + row * NB_ALIENS_COL] >= 3 ||
-        aliens[col + row * NB_ALIENS_COL] == 0) {
+    if (aliens[col + row * NB_ALIEN_COL] >= 3 ||
+        aliens[col + row * NB_ALIEN_COL] == 0) {
 
       return false;
     }
-    aliens[col + row * NB_ALIENS_COL] = 3; // start explosion frame
+    aliens[col + row * NB_ALIEN_COL] = 3; // start explosion frame
     // update score
     UserScore::CurrentScore += 10;
     
@@ -375,7 +400,7 @@ bool kill_alien(uint8_t x, uint8_t y) {
 uint8_t check_alien_status() {
   // count remaining aliens
   uint8_t nb = 0;
-  for (uint8_t i = 0; i < NB_ALIENS_COL * NB_ALIEN_ROW; ++i) {
+  for (uint8_t i = 0; i < NB_ALIEN_COL * NB_ALIEN_ROW; ++i) {
     nb += aliens[i];
   }
 
@@ -386,8 +411,8 @@ uint8_t check_alien_status() {
   uint8_t nbdeadrow = 0;
   for (uint8_t r = NB_ALIEN_ROW - 1; r >= 0; --r) {
     nb = 0;
-    for (uint8_t c = 0; c < NB_ALIENS_COL; ++c) {
-      nb += aliens[c + r * NB_ALIENS_COL];
+    for (uint8_t c = 0; c < NB_ALIEN_COL; ++c) {
+      nb += aliens[c + r * NB_ALIEN_COL];
     }
     if (nb == 0) {
       nbdeadrow++;
