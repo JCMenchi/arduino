@@ -1,14 +1,17 @@
 #include <CH1115Display.h>
 #include <sound.h>
+#include <millisec.h>
 
 #include <common.h>
 #include <sprites.h>
 #include <spaceship_engine.h>
 #include <alien_engine.h>
+#include <highscore.h>
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif
+
 
 // Number of spaceship lives
 uint8_t nb_spaceship = MAX_LIFE;
@@ -28,8 +31,15 @@ uint8_t x_prev_position = 64;
 const int16_t fire_sound[] = {NOTE_G4, NOTE_G5, NOTE_G6, 0};
 uint8_t fire_sound_pos = 0;
 
+// manage explosion state
+int8_t explosion_state = -1;
+
 // Move the spaceship left, right, or initialize its position
 void move_spaceship(uint8_t direction) {
+    if (explosion_state != -1) {
+        return;
+    }
+
     x_prev_position = x_spaceship_position;
 
     if (direction == MOVE_INIT) {
@@ -65,7 +75,7 @@ void move_spaceship(uint8_t direction) {
 
 // Handle spaceship actions (e.g., firing missile)
 void spaceship_action(uint8_t action) {
-    if (action == GUNFIRE_ACTION && missile_state == 0) {
+    if (action == GUNFIRE_ACTION && missile_state == 0 && explosion_state == -1) {
         playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_G4, 35);
         x_missile = x_spaceship_position + SPRITE_WIDTH / 2;
         y_missile = 0;
@@ -86,6 +96,11 @@ void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display
         display->updatePageColumn(0x00, OVERWRITE_MODE);
         display->updatePageColumn(0x00, OVERWRITE_MODE);
         display->endPageDrawing();
+        if (UserScore::CurrentScore > 1) {
+            UserScore::CurrentScore -= 1;  // Penalty for hitting shelter
+        } else {
+            UserScore::CurrentScore = 0;  // Don't go negative
+        }
     } else {
         // Check if hit alien
         bool k = kill_alien(x, ymin) || kill_alien(x, ymax);
@@ -159,13 +174,50 @@ void update_missile(CH1115Display *display) {
     }
 }
 
+uint32_t prev_update_explosion_time = 0;
+
 // Draw spaceship and update missile if needed
 void update_spaceship(CH1115Display *display) {
-    display->drawSprite(x_spaceship_position, 56, SPRITE_WIDTH, SPRITE_HEIGHT, spaceship,
-                        OVERWRITE_MODE);
-    if (missile_state) {
-        update_missile(display);
+    
+    // draw life indicators
+    for (int8_t i = 0; i < nb_spaceship -1; i++) {
+        display->drawSprite( i * SMALL_SPRITE_WIDTH, 56, SMALL_SPRITE_WIDTH, SPRITE_HEIGHT,small_spaceship, OVERWRITE_MODE);
     }
+    // clear draw life indicators
+    for (int8_t i = nb_spaceship-1; i < MAX_LIFE-1; i++) {
+        display->drawSprite( i * SMALL_SPRITE_WIDTH, 56, SMALL_SPRITE_WIDTH, SPRITE_HEIGHT,empty, OVERWRITE_MODE);
+    }
+
+    // If spaceship is destroyed, show explosion animation
+    if (explosion_state != -1) {
+        // Handle explosion animation
+        display->drawSprite(x_spaceship_position, 56, SPRITE_WIDTH, SPRITE_HEIGHT,
+                            explosion_frames + explosion_state * SPRITE_WIDTH,
+                            OVERWRITE_MODE);
+        uint32_t now = milliseconds();
+        if (prev_update_explosion_time == 0) {
+            playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 200);
+            prev_update_explosion_time = now;
+        } else if (now - prev_update_explosion_time > 400) {
+            playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 200);
+            explosion_state++;
+            prev_update_explosion_time = now;
+        }   
+
+        if (explosion_state >= 5) {
+            explosion_state = -1;  // Reset after last frame
+            prev_update_explosion_time = 0;
+        }
+        
+    } else {
+        // Draw the spaceship normally
+        display->drawSprite(x_spaceship_position, 56, SPRITE_WIDTH, SPRITE_HEIGHT, spaceship,
+                            OVERWRITE_MODE);
+        if (missile_state) {
+            update_missile(display);
+        }
+    }
+
 }
 
 // Draw all shelters on the screen
@@ -179,4 +231,33 @@ void draw_shelter(CH1115Display *display) {
 }
 
 // Check spaceship status (stub, always returns 0)
-uint8_t check_spaceship_status() { return 0; }
+uint8_t check_spaceship_status() { 
+    if (nb_spaceship == 0) {
+        return ALIEN_WIN;  // Spaceship is destroyed
+    }    
+    return 0; 
+}
+
+// Handle spaceship destruction by alien
+// Decreases the number of spaceships and returns true if this was the last one
+// If the score is greater than 10, it deducts 10 points, otherwise sets it to 0
+bool kill_spaceship() {
+    if (nb_spaceship > 0) {
+        nb_spaceship -= 1;
+        explosion_state = 0;
+        if (UserScore::CurrentScore > 10) {
+            UserScore::CurrentScore -= 10;  // Penalty for being hit
+        } else {
+            UserScore::CurrentScore = 0;  // Don't go negative
+        }
+        // start explosion sound
+        playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 100);
+        #ifdef HAS_SERIAL
+        USART_WriteString("Kill spaceship, remaining: ");
+        USART_WriteInt(nb_spaceship);
+        USART_WriteString("\n");
+        #endif
+    }
+
+    return (nb_spaceship == 0);  // Return true if this was the last spaceship
+}

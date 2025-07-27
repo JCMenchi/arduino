@@ -220,7 +220,9 @@ bool joystick_interpretor(Nunchuk *joystick, bool changed) {
     }
     // Handle high score name entry completion and save
     else if (changed && screen_mode == HIGH_SCORE_UPDATE_SCREEN && joystick->z_button()) {
+        #ifdef HAS_SERIAL
         USART_WriteString("Validate High Score username\n");
+        #endif
         // Save high score to EEPROM
         UserScore_saveEEPROM(highscore, 3);
         // Reset user position tracking
@@ -285,11 +287,13 @@ void gameloop() {
             int8_t changed = UserScore::UpdateHighScore(highscore, 3, UserScore::CurrentScore);
             now = milliseconds();
             if (changed != -1) {
+                #ifdef HAS_SERIAL
                 USART_WriteString("New score detected: ");
                 USART_WriteInt(changed);
                 USART_WriteString(" ");
                 USART_WriteInt(UserScore::CurrentScore);
                 USART_WriteString("\n");
+                #endif
                 changeToHighScoreUpdate(now, changed);
                 UserScore_saveEEPROM(highscore, 3);
             } else {
@@ -350,6 +354,7 @@ void gameloop() {
   Init and main loop
 */
 void setup() {
+    #ifdef HAS_SERIAL
 #ifdef READ_SERIAL_LINE
     USART_Init(BAUD_RATE_115200, SERIAL_CB);
     serial_buffer_pos = 0;
@@ -358,7 +363,7 @@ void setup() {
 #endif
 
     USART_WriteString("Welcome.\n");
-
+    #endif
     // init high score EEPROM
     UserScore_initEEPROM(highscore, 3);
 
@@ -373,9 +378,13 @@ void setup() {
 
     // init nunchuk
     if (!joystick.initialize()) {
+        #ifdef HAS_SERIAL
         USART_WriteString("Nunchuk not found.\n");
+        #endif
     } else {
+        #ifdef HAS_SERIAL
         USART_WriteString("Nunchuk initialized.\n");
+        #endif
     }
     _delay_ms(1000);
 

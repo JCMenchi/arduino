@@ -10,7 +10,7 @@ class CH1115Display;
 extern uint8_t x_spaceship_position;
 
 // Maximum number of lives for the spaceship
-const uint8_t MAX_LIFE = 1;
+const uint8_t MAX_LIFE = 3;
 
 // Global variable: number of spaceships (lives) remaining
 extern uint8_t nb_spaceship;
@@ -52,5 +52,11 @@ uint8_t check_spaceship_status();
  * @param display Pointer to the display object.
  */
 void clear_missile(uint8_t x, uint8_t y, CH1115Display *display);
+
+/**
+ * @brief spaceship is destroyed by alien. Decreases the number of spaceships.
+ * @return true if this is the last spaceship, false otherwise
+ */
+bool kill_spaceship();
 
 #endif
