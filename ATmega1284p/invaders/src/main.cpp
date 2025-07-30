@@ -8,7 +8,6 @@
 #include <nunchuk.h>
 #include <CH1115Display.h>
 #include <bitmap_font.h>
-#include <sound.h>
 #include <millisec.h>
 
 #include <common.h>
@@ -16,12 +15,14 @@
 #include <screens.h>
 #include <alien_engine.h>
 #include <spaceship_engine.h>
+#include <soundmanager.h>
+#include <music.h>
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif
 
-//#define READ_SERIAL_LINE 1
+#define READ_SERIAL_LINE 0
 
 // Define joystick thresholds
 #define JOYSTICK_THRESHOLD 10
@@ -179,6 +180,8 @@ bool joystick_interpretor(Nunchuk *joystick, bool changed) {
     if (changed && (screen_mode == INIT_SCREEN || screen_mode == HIGH_SCORE_SCREEN) && joystick->c_button()) {
         screen_mode = GAME_SCREEN;
         UserScore::CurrentScore = 0;
+        SoundManager::instance()->start_sound();
+        //SoundManager::instance()->start_music();
         drawScene(&ch1115, true);
         joystick->display();
         return true;
@@ -245,6 +248,8 @@ void gameloop() {
     bool changed = joystick.update();
     joystick_interpretor(&joystick, changed);
 
+    SoundManager::instance()->update(now);
+
     if (screen_mode == INIT_SCREEN) {
         if (now > (init_screen_start + SCREEN_TIME_MS)) {
             changeToHighScore(now);
@@ -259,21 +264,12 @@ void gameloop() {
         updateHighScore(&ch1115, highscore, 3);
         _delay_ms(50);
     } else if (screen_mode == GAME_SCREEN) {
-        // music loop
-        if (start_note == 0) {
-            start_note = now;
-            playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, sound_loop[current_note], SOUND_LOOP_NOTE_DURATION);
-        } else if (now > (start_note + SOUND_LOOP_NOTE_DURATION + SOUND_LOOP_NOTE_PAUSE)) {
-            stopNote();
-            start_note = 0;
-            current_note = (current_note + 1) % 4;
-        }
-
         drawScene(&ch1115, false);
 
         // check win condition
         uint8_t alien_status = check_alien_status();
         if (alien_status != 0) {
+            SoundManager::instance()->stop_music();
             // draw result
             if (alien_status == ALIEN_WIN) {
                 changeToGameOver(now);
@@ -319,14 +315,20 @@ void gameloop() {
         escape = false;
         memset(escape_buffer, 0, 10);
         escpos = 0;
+        #ifdef HAS_SERIAL
         USART_WriteString(work_buffer);
+        #endif
         if (strcmp(work_buffer, "score") == 0) {
+            #ifdef HAS_SERIAL
             USART_WriteString("set score\n");
+            #endif
             highscore[1].reset(42);
             changeToHighScoreUpdate(milliseconds(), 1);
             return;
         } else if (strcmp(work_buffer, "reset") == 0) {
+            #ifdef HAS_SERIAL
             USART_WriteString("reset score\n");
+            #endif
             highscore[0].reset();
             highscore[1].reset();
             highscore[2].reset();
@@ -339,6 +341,28 @@ void gameloop() {
         } else if (strcmp(work_buffer, "victory") == 0) {
             // victory command
             changeToVictory(now);
+            return;
+        } else if (strcmp(work_buffer, "fxon") == 0) {
+            SoundManager::instance()->enable_effect();
+            return;
+        } else if (strcmp(work_buffer, "fxoff") == 0) {
+            SoundManager::instance()->disable_effect();
+            return;
+        } else if (strcmp(work_buffer, "sndon") == 0) {
+            SoundManager::instance()->start_music();
+            return;
+        } else if (strcmp(work_buffer, "sndoff") == 0) {
+            SoundManager::instance()->stop_music();
+            return;
+        } else if (strcmp(work_buffer, "state") == 0) {
+            #ifdef HAS_SERIAL
+            USART_WriteString("sound: ");
+            USART_WriteBool(SoundManager::instance()->is_music_playing());
+            USART_WriteString("\n");
+            USART_WriteString("effect: ");
+            USART_WriteBool(SoundManager::instance()->is_effect_enabled());
+            USART_WriteString("\n");
+            #endif
             return;
         }
         for (size_t i = 0; i < strlen(work_buffer); ++i) {
@@ -353,6 +377,7 @@ void gameloop() {
 /*
   Init and main loop
 */
+
 void setup() {
     #ifdef HAS_SERIAL
 #ifdef READ_SERIAL_LINE
@@ -387,6 +412,12 @@ void setup() {
         #endif
     }
     _delay_ms(1000);
+
+    // init sound
+    SoundManager::init(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN);
+    SoundManager::instance()->setMusic(invaders, invaders_music_size, 800, 200);
+    SoundManager::instance()->disable_effect();
+    SoundManager::instance()->start_music();
 
     // draw welcome screen
     drawStart(&ch1115);

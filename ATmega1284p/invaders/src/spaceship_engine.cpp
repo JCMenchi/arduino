@@ -1,5 +1,4 @@
 #include <CH1115Display.h>
-#include <sound.h>
 #include <millisec.h>
 
 #include <common.h>
@@ -7,6 +6,7 @@
 #include <spaceship_engine.h>
 #include <alien_engine.h>
 #include <highscore.h>
+#include <soundmanager.h>
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
@@ -26,10 +26,6 @@ uint8_t y_missile = 0;
 // Spaceship position (horizontal)
 uint8_t x_spaceship_position = 64;
 uint8_t x_prev_position = 64;
-
-// Sound sequence for firing
-const int16_t fire_sound[] = {NOTE_G4, NOTE_G5, NOTE_G6, 0};
-uint8_t fire_sound_pos = 0;
 
 // manage explosion state
 int8_t explosion_state = -1;
@@ -76,7 +72,8 @@ void move_spaceship(uint8_t direction) {
 // Handle spaceship actions (e.g., firing missile)
 void spaceship_action(uint8_t action) {
     if (action == GUNFIRE_ACTION && missile_state == 0 && explosion_state == -1) {
-        playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_G4, 35);
+        SoundManager::instance()->sound_effect(SoundManager::FIRE_EFFECT);
+        //playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_G4, 35);
         x_missile = x_spaceship_position + SPRITE_WIDTH / 2;
         y_missile = 0;
         missile_state = 1;
@@ -87,8 +84,9 @@ void spaceship_action(uint8_t action) {
 void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display) {
     if ((ymin <= 55 && ymin >= 48) || (ymax <= 55 && ymax >= 48)) {
         // Hit shelter
-        stopNote();
-        playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_D1, 100);
+        SoundManager::instance()->sound_effect(SoundManager::HIT_SHELTER_EFFECT);
+        //stopNote();
+        //playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_D1, 100);
         missile_state = 0;
         y_missile = 0;
         display->startPageDrawing(x_missile - 1, 48);
@@ -105,8 +103,9 @@ void hit_something(uint8_t x, uint8_t ymin, uint8_t ymax, CH1115Display *display
         // Check if hit alien
         bool k = kill_alien(x, ymin) || kill_alien(x, ymax);
         if (k) {
-            stopNote();
-            playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 100);
+            SoundManager::instance()->sound_effect(SoundManager::HIT_ALIEN_EFFECT);
+            //stopNote();
+            //playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 100);
             clear_missile(x_missile, y_missile, display);
             missile_state = 0;
             y_missile = 0;
@@ -196,10 +195,10 @@ void update_spaceship(CH1115Display *display) {
                             OVERWRITE_MODE);
         uint32_t now = milliseconds();
         if (prev_update_explosion_time == 0) {
-            playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 200);
+            //playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 200);
             prev_update_explosion_time = now;
         } else if (now - prev_update_explosion_time > 400) {
-            playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 200);
+            //playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 200);
             explosion_state++;
             prev_update_explosion_time = now;
         }   
@@ -251,7 +250,8 @@ bool kill_spaceship() {
             UserScore::CurrentScore = 0;  // Don't go negative
         }
         // start explosion sound
-        playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 100);
+        SoundManager::instance()->sound_effect(SoundManager::EXPLOSION_EFFECT);
+        // playNote(&MUSIC_PORT, &MUSIC_DDR, MUSIC_PIN, NOTE_C2, 100);
         #ifdef HAS_SERIAL
         USART_WriteString("Kill spaceship, remaining: ");
         USART_WriteInt(nb_spaceship);

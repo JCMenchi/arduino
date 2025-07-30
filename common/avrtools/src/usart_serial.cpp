@@ -20,6 +20,8 @@ void USART_WriteString(const char *str) {}
 void USART_WriteInt(int32_t i, uint8_t base) {}
 void USART_WriteUInt(uint32_t i, uint8_t base) {}
 
+void USART_WriteBool(bool b) {}
+
 uint8_t USART_GetLastChar() { return 32; }
 
 #else
@@ -201,6 +203,10 @@ void USART_WriteChar(char d) {
 void USART_WriteString(const char *str) {
   while (*str)
     USART_Transmit(*str++);
+}
+
+void USART_WriteBool(bool b) {
+  b ? USART_WriteString("on") : USART_WriteString("off");
 }
 
 void USART_WritePString(const char *str) {

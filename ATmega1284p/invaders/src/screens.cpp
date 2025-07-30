@@ -1,7 +1,6 @@
 
 #include <util/delay.h>
 
-#include <sound.h>
 #include <millisec.h>
 #include <CH1115Display.h>
 
@@ -11,6 +10,7 @@
 #include <bitmap_font.h>
 #include <spaceship_engine.h>
 #include <alien_engine.h>
+#include <soundmanager.h>
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
@@ -78,8 +78,7 @@ void drawScene(CH1115Display *display, bool first) {
   unsigned long start = milliseconds(); // Record start time for performance
 
   if (first) {
-    // Start game sound and initialize FPS counters
-    start_sound();
+    // initialize FPS counters
     #ifdef SHOW_PERFORMANCE
     fps_start_time = 0;
     fps_nb_frame = 0;
