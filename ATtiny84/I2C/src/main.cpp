@@ -12,14 +12,19 @@
 
 int ledState = GPIO_LOW;  // ledState used to set the LED
 
-unsigned long previousMillis = 0;  // will store last time LED was updated
+uint32_t previousMillis = 0;  // will store last time LED was updated
 
-const long interval = 500;  // interval at which to blink (milliseconds)
+const int32_t interval = 500;  // interval at which to blink (milliseconds)
+
+uint32_t previousSendCounter = 0;
+const int32_t send_interval = 2000;
+uint32_t counter = 0;
 
 #ifdef HAS_NUNCHUK
 #include <nunchuk.h>
 Nunchuk joystick;
 #endif
+#include <string.h>
 
 SPIManager spimgr;
 NRF24Manager radio(0);
@@ -36,6 +41,12 @@ void setup() {
 
     GPIO_OUTPUT(A, 0);
     GPIO_SET_LOW(A, 0);
+
+    GPIO_OUTPUT(B, 0);
+    GPIO_SET_LOW(B, 0);
+
+    GPIO_OUTPUT(B, 1);
+    GPIO_SET_LOW(B, 1);
 
     INT0_WriteString("Welcome ATtiny84\n");
 
@@ -89,6 +100,8 @@ void display(Nunchuk &joystick) {
 }
 #endif
 
+static char msgBuffer[32];
+static char receivedMsg[32];
 
 void loop() {
     unsigned long currentMillis = milliseconds();
@@ -115,19 +128,47 @@ void loop() {
             GPIO_SET_LOW(A, 0);
         }
 
-        if (INT0_SerialCommandMgr::hasCommand()) {
-            const char *command = INT0_SerialCommandMgr::command();
-            if (command) {
-                INT0_WriteString("Received command: ");
-                INT0_WriteString(command);
-                INT0_WriteString("\n");
-                radio.send(command);
-                radio.info();
-            }
+        
+    }
+
+    if (currentMillis - previousSendCounter >=  send_interval) {
+        GPIO_SET_HIGH(B, 0);
+        // save the last time
+        previousSendCounter = currentMillis;
+        counter++;
+        
+        strncat(msgBuffer, "ATtiny84: ", 10);
+        ltoa(counter, msgBuffer + 10, 10);
+        INT0_WriteString(msgBuffer);
+        INT0_WriteString("\n");
+        radio.send(msgBuffer);
+        GPIO_SET_LOW(B, 0);
+    }
+    
+    if (INT0_SerialCommandMgr::hasCommand()) {
+        const char *command = INT0_SerialCommandMgr::command();
+        if (command) {
+            GPIO_SET_HIGH(B, 0);
+            INT0_WriteString("Received command: ");
+            INT0_WriteString(command);
+            INT0_WriteString("\n");
+            radio.send(command);
+            radio.info();
+            GPIO_SET_LOW(B, 0);
         }
     }
     
-    //_delay_ms(10);  // Small delay to prevent excessive CPU usage
+    if (radio.dataAvailable()) {
+        GPIO_SET_HIGH(B, 1);
+        const char *msg = radio.read_message();
+        if (msg) {
+            strncat(receivedMsg, msg, 31);
+            INT0_WriteString("Received message: ");
+            INT0_WriteString(receivedMsg);
+            INT0_WriteString("\n");
+            GPIO_SET_LOW(B, 1);
+        }
+    }
 }
 
 #ifndef ARDUINO
