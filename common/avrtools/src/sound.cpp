@@ -1,23 +1,67 @@
 
+/**
+ * @file sound.cpp
+ * @brief Implementation of tone generation via Timer2 for AVR microcontrollers
+ * 
+ * Provides PWM-based tone generation at specified frequencies with
+ * optional duration control. Uses Timer2 compare match interrupt
+ * to toggle output pin at the appropriate rate.
+ * 
+ * Implementation notes:
+ * - Tone pin is toggled on every timer interrupt
+ * - For frequency f, toggle rate is 2*f (to complete full cycle)
+ * - Supported on ATmega328P and similar; no-op on tinyAVR
+ * 
+ * @note Device-specific: Functions return immediately on tinyAVR (no tone support)
+ */
+
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 
-// timerx_toggle_count:
-//  > 0 - duration specified
-//  = 0 - stopped
-//  < 0 - infinitely (until stop() method called, or new play() called)
-
+/**
+ * Timer2 toggle counter:
+ *  > 0: Duration specified in milliseconds (counts down to 0)
+ *  = 0: Tone is stopped
+ *  < 0: Plays infinitely (until stopNote() or new playNote() called)
+ */
 volatile long timer2_toggle_count;
-volatile uint8_t *timer2_pin_port;  // CPU PORT
-volatile uint8_t timer2_pin_mask;   // mask 
 
+/** @brief Pointer to port register for tone output */
+volatile uint8_t *timer2_pin_port;
+/** @brief Bit mask for tone pin within port */
+volatile uint8_t timer2_pin_mask;
+
+/** @brief Currently active tone pin (255 = no tone) */
 volatile uint8_t tone_pin = 255;
 
 
+/**
+ * @brief Tone generation not supported on these devices
+ * 
+ * ATtiny and some ATmega devices don't have Timer2 available
+ * or have other limitations that prevent reliable tone generation.
+ */
 #if defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny84__) || defined(__AVR_ATmega32__) || defined(__AVR_ATmega16__) || defined(__AVR_ATmega8535__)
+
+/** @brief No-op playNote for unsupported devices */
 void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin_on_port, unsigned int frequency, unsigned long duration) {}
+/** @brief No-op stopNote for unsupported devices */
 void stopNote() {}
+/**
+ * @brief Tone generation supported (ATmega328P and similar with Timer2)
+ */
 #else
+
+/**
+ * @brief Initialize tone generation on first playNote call
+ * 
+ * Sets up Timer2 for CTC mode and records the port/pin information.
+ * Subsequent calls while tone is active return immediately (0).
+ * 
+ * @param mcu_port Pointer to PORT register for output pin
+ * @param pin_on_port Bit number within the port (0-7)
+ * @return 1 if initialized, 0 if tone already active
+ */
 static int8_t toneBegin(volatile uint8_t* mcu_port, uint8_t pin_on_port) {
   if (tone_pin == 255) {
     tone_pin = pin_on_port;
@@ -43,6 +87,18 @@ static int8_t toneBegin(volatile uint8_t* mcu_port, uint8_t pin_on_port) {
 }
 
 // frequency (in hertz) and duration (in milliseconds).
+/**
+ * @brief Play a tone at specified frequency for a duration
+ * 
+ * Generates a square wave at the specified frequency using Timer2.
+ * Automatically selects appropriate prescaler and OCR value.
+ * 
+ * @param mcu_port Pointer to PORT register for output pin
+ * @param mcu_ddr Pointer to DDR register for output pin
+ * @param pin_on_port Bit number within the port (0-7)
+ * @param frequency Tone frequency in Hz
+ * @param duration Duration in milliseconds (0 = play infinitely)
+ */
 void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin_on_port, unsigned int frequency, unsigned long duration) {
   uint8_t prescalarbits = 0b001;
   long toggle_count = 0;
@@ -89,54 +145,79 @@ void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin
       }
     }
 
+    // Set prescaler bits in Timer2 control register B
     TCCR2B = (TCCR2B & 0b11111000) | prescalarbits;
 
-    // Calculate the toggle count
+    // Calculate toggle count: 2 toggles per period, duration in ms
+    // Toggle count = 2 * frequency * duration_ms / 1000
     if (duration > 0) {
       toggle_count = 2 * frequency * duration / 1000;
     } else {
+      // Negative = play infinitely
       toggle_count = -1;
     }
 
     // Set the OCR for the given timer,
     // set the toggle count,
     // then turn on the interrupts
+    // Set output compare register and enable interrupt
     OCR2A = ocr;
     timer2_toggle_count = toggle_count;
     TIMSK2 |= (1 << OCIE2A);
   }
 }
 
-// XXX: this function only works properly for timer 2 (the only one we use
-// currently).  for the others, it should end the tone, but won't restore
-// proper PWM functionality for the timer.
+/**
+ * @brief Disable Timer2 and restore default state
+ * 
+ * Disables Timer2 compare match interrupt and resets
+ * timer control registers to default.
+ */
 void disableTimer() {
-  TIMSK2 &= ~(1 << OCIE2A); // disable interrupt
+  // Disable Timer2 compare A interrupt
+  TIMSK2 &= ~(1 << OCIE2A);
+  // Reset to normal mode (not CTC)
   TCCR2A = (1 << WGM20);
+  // Set prescaler to /64
   TCCR2B = (TCCR2B & 0b11111000) | (1 << CS22);
+  // Clear compare value
   OCR2A = 0;
 }
 
+/**
+ * @brief Stop tone generation immediately
+ * 
+ * Disables Timer2 interrupt, sets tone pin LOW, and marks
+ * tone generation as inactive.
+ */
 void stopNote() {
   if (tone_pin != 255) {
-    // stop timer
+    // Disable timer interrupt
     disableTimer();
-    // disable ouput (set LOW)
+    // Set output pin LOW
     *timer2_pin_port &= ~timer2_pin_mask;
-    //
+    // Mark no tone active
     tone_pin = 255;
   }
 }
 
+/**
+ * @brief Timer2 compare match interrupt handler
+ * 
+ * Toggles the tone output pin at each interrupt.
+ * Decrements toggle counter and stops tone when complete.
+ */
 ISR(TIMER2_COMPA_vect) {
 
   if (timer2_toggle_count != 0) {
-    // toggle the pin
+    // Toggle the tone output pin
     *timer2_pin_port ^= timer2_pin_mask;
 
+    // Decrement counter if finite duration
     if (timer2_toggle_count > 0)
       timer2_toggle_count--;
   } else {
+    // Tone finished, clean up
     stopNote();
   }
 }

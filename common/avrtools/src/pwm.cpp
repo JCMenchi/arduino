@@ -1,3 +1,21 @@
+/**
+ * @file pwm.cpp
+ * @brief Implementation of PWM (Pulse Width Modulation) control for multiple timer channels
+ * 
+ * Provides PWM configuration and control for various AVR device families.
+ * Supports both standard PWM (0-255 duty cycle) and servo PWM (microsecond pulse width).
+ * 
+ * Device support:
+ * - ATmega1284P: Timers 0, 1, 2, 3 with multiple channels
+ * - ATmega8515: Timers 0, 1, 2
+ * - ATmega8535/16/32: Timers 0, 1, 2
+ * - ATmega328P/ATtiny45/84: Limited timer support
+ * 
+ * @note Timer0A is reserved for millisecond timing
+ * @note Some channels conflict with SPI on certain devices
+ * @note Frequencies vary by device and prescaler settings
+ */
+
 #include <pwm.h>
 
 #include <gpio.h>
@@ -8,21 +26,38 @@
 #include <usart_serial.h>
 #endif
 
-
+/** @brief CPU frequency in Hz (used for timing calculations) */
 #if F_CPU == 16000000L
-const uint8_t NB_CYCLE_PER_MICRO_SEC = 16;
+const uint8_t NB_CYCLE_PER_MICRO_SEC = 16;  /**< 16 cycles per microsecond at 16MHz */
 #elif F_CPU == 8000000L
-const uint8_t NB_CYCLE_PER_MICRO_SEC = 8;
+const uint8_t NB_CYCLE_PER_MICRO_SEC = 8;   /**< 8 cycles per microsecond at 8MHz */
 
 #else
 #error "unknown CPU freq"
 #endif
 
 
+/**
+ * @brief ATmega1284P PWM implementation
+ * 
+ * Supports PWM on timers 0, 1, 2, 3 with various channels.
+ * Typically configured with 8MHz internal oscillator.
+ * Frequencies:
+ * - Timer 0: ~2 kHz (8-bit, prescaler /8)
+ * - Timer 1: ~0.5 kHz (10-bit, prescaler /8)  
+ * - Timer 2: ~2 kHz (8-bit, prescaler /8)
+ * - Timer 3: Similar to Timer 1
+ */
 #if defined(__AVR_ATmega1284P__) 
 
-// Use internal oscillator so F_CPU is 8MHz
-
+/**
+ * @brief Enable PWM on specified pin (ATmega1284P)
+ * 
+ * Configures the appropriate timer and output compare unit for PWM generation
+ * at 8-bit (0-255) resolution.
+ * 
+ * @param pwm_pin PWM channel identifier (PWM_OC0B, PWM_OC1A/B, PWM_OC2A/B, PWM_OC3A/B)
+ */
 void enablePWM(uint8_t pwm_pin) {
 
     if (pwm_pin == PWM_OC0B) {
@@ -97,6 +132,14 @@ void enablePWM(uint8_t pwm_pin) {
 }
 
 
+/**
+ * @brief Enable servo-compatible PWM on specified pin (ATmega1284P)
+ * 
+ * Configures 16-bit timer for servo control with 20ms period.
+ * Servo pulse width typically 1-2ms (value range 1000-2000 at 1µs/tick).
+ * 
+ * @param pwm_pin PWM channel identifier (PWM_OC1A, PWM_OC1B, PWM_OC2A, PWM_OC2B)
+ */
 void enableServoPWM(uint8_t pwm_pin) {
     uint8_t oldSREG = SREG;
     cli();
@@ -111,7 +154,7 @@ void enableServoPWM(uint8_t pwm_pin) {
         TCCR1B |= (1<<CS11);
         TCCR1B &= ~(1<<CS12 | 1<<CS10);
 
-        // calculate top for 20 ms period (1us per tick and fast PWM)
+        // 20ms period with 1µs per tick (ICR1 = F_CPU/8/1000000*20000 = 20000)
         ICR1 = 20000;
 
         // disable interrupt
@@ -175,6 +218,17 @@ void enableServoPWM(uint8_t pwm_pin) {
     sei();
 }
 
+/**
+ * @brief Set PWM duty cycle for standard PWM output
+ * 
+ * Updates the output compare register to set pulse width.
+ * Value range 0-255 represents 0-100% duty cycle.
+ * 
+ * @param pwm_pin PWM channel identifier
+ * @param value Duty cycle (0-255, where 0=always off, 255=always on)
+ * 
+ * @note PWM must be enabled with enablePWM() first
+ */
 void setPWM(uint8_t pwm_pin, uint8_t value) {
     if (pwm_pin == PWM_OC0B) {
         OCR0B = value;
@@ -189,6 +243,18 @@ void setPWM(uint8_t pwm_pin, uint8_t value) {
     }
 }
 
+/**
+ * @brief Set servo PWM pulse width
+ * 
+ * Updates output compare register for servo control.
+ * Pulse width in timer ticks (typically microseconds at 1MHz clock).
+ * 
+ * @param pwm_pin PWM channel identifier
+ * @param value Pulse width in timer ticks (typically 1000-2000 for 1-2ms)
+ * 
+ * @note Servo PWM must be enabled with enableServoPWM() first
+ * @note Value is capped at 20000 (20ms maximum period)
+ */
 void setServoPWM(uint8_t pwm_pin, uint16_t value) {
     if (pwm_pin == PWM_OC1A) {
 
@@ -240,8 +306,17 @@ void setServoPWM(uint8_t pwm_pin, uint16_t value) {
     }
 }
 
+/**
+ * @brief ATmega8515 PWM implementation
+ * 
+ * Supports PWM on timers 0, 1, 2.
+ */
 #elif defined(__AVR_ATmega8515__) 
 
+/**
+ * @brief Enable PWM on specified pin (ATmega8515)
+ * @param pwm_pin PWM channel identifier
+ */
 void enablePWM(uint8_t pwm_pin) {
 
     if (pwm_pin == PWM_OC0B) {

@@ -1,4 +1,23 @@
 
+/**
+ * @file int0_serial.cpp
+ * @brief Implementation of INT0-based bit-bang serial communication
+ * 
+ * Implements software serial communication using the INT0 external interrupt.
+ * Provides both transmit (bit-banging on configurable TX pin) and receive
+ * (interrupt-driven on INT0 pin) functionality.
+ * 
+ * Device-specific configurations:
+ * - ATtiny45: INT0 on B2, TX port A
+ * - ATtiny84: INT0 on B2, TX port B (configurable)
+ * - ATmega328P/1284P: INT0 on D2
+ * - ATmega8535/8515/16/32: INT0 on D2
+ * 
+ * @note Fixed baud rate of 9600 bps
+ * @note Receive uses interrupt-driven bit-sampling
+ * @note Transmit uses software timing with _delay_loop_2()
+ */
+
 #include "int0_serial.h"
 
 #include <avr/interrupt.h>
@@ -54,6 +73,12 @@
     only 9600
 */
 
+/**
+ * @brief Subtract with lower bound (never returns 0)
+ * @param num Minuend
+ * @param sub Subtrahend
+ * @return num - sub if positive, 1 otherwise
+ */
 uint16_t subtract_cap(uint16_t num, uint16_t sub) {
     if (num > sub)
         return num - sub;
@@ -61,14 +86,28 @@ uint16_t subtract_cap(uint16_t num, uint16_t sub) {
         return 1;
 }
 
+/** @brief GPIO pin number for serial transmit */
 uint8_t _transmitPin;
 
-// Expressed as 4-cycle delays (must never be 0!)
+/** @brief Receive centering delay in 4-cycle units (never 0) */
 uint16_t _rx_delay_centering;
+/** @brief Receive intra-bit delay in 4-cycle units (never 0) */
 uint16_t _rx_delay_intrabit;
+/** @brief Receive stop bit delay in 4-cycle units (never 0) */
 uint16_t _rx_delay_stopbit;
+/** @brief Transmit bit delay in 4-cycle units (never 0) */
 uint16_t _tx_delay;
 
+/**
+ * @brief Calculate bit timing delays for 9600 baud
+ * 
+ * Pre-calculates the various timing delays needed for correct bit-bang
+ * serial communication at 9600 bps. Timings are specified in 4-cycle
+ * delay units for use with _delay_loop_2().
+ * 
+ * @note All delays are calculated based on F_CPU frequency
+ * @note Internal function, called by INT0_Init()
+ */
 void INT0_SetBaudRate() {
 
     _rx_delay_centering = _rx_delay_intrabit = _rx_delay_stopbit = _tx_delay = 0;
@@ -160,6 +199,16 @@ void INT0_Init(uint8_t tpin, volatile void (*INT0_rec_cb)(uint8_t)) {
     _delay_loop_2(_tx_delay);  // if we were low this establishes the end
 }
 
+/**
+ * @brief INT0 external interrupt handler for serial receive
+ * 
+ * Implements bit-bang serial reception on INT0 pin. When a start bit
+ * (falling edge) is detected, reads 8 data bits followed by stop bit.
+ * Invokes the registered callback with each received byte.
+ * 
+ * @note Disables INT0 during reception to prevent false triggers
+ * @note Automatically re-enables INT0 after stop bit is detected
+ */
 ISR(INT0_vect) {
     uint8_t d = 0;
 
@@ -217,6 +266,19 @@ ISR(INT0_vect) {
     }
 }
 
+/**
+ * @brief Transmit a byte via INT0 serial (bit-bang method)
+ * 
+ * Transmits 8 data bits with start and stop bits at 9600 baud.
+ * Uses software timing (_delay_loop_2) to generate accurate bit periods.
+ * 
+ * @param data Byte to transmit
+ * @return 1 if successful, 0 if not initialized (_tx_delay == 0)
+ * 
+ * @note Disables interrupts during transmission for accurate timing
+ * @note Local variables used to ensure compiler places them in registers
+ *       before interrupt disable, improving cycle timing accuracy
+ */
 uint8_t INT0_Transmit(uint8_t data) {
     if (_tx_delay == 0) {
         return 0;
