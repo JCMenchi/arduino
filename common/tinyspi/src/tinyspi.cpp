@@ -463,6 +463,7 @@ void spi_bulk_exchange(uint8_t *send_buffer, uint8_t *receive_buffer, uint8_t co
  */
 void SPIManager::begin(uint8_t cspin) {
     GPIO_SET_LOW(A, cspin);
+    _delay_us(5); // Short delay to allow slave to detect CS assertion
 }
 
 /**
@@ -471,6 +472,7 @@ void SPIManager::begin(uint8_t cspin) {
  */
 void SPIManager::end(uint8_t cspin) {
     GPIO_SET_HIGH(A, cspin);
+    _delay_us(5); // Short delay to allow slave to detect CS de-assertion
 }
 
 /**

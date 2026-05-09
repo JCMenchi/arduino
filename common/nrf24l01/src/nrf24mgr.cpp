@@ -1,3 +1,33 @@
+/**
+ * @file nrf24mgr.cpp
+ * @brief NRF24L01+ 2.4GHz RF Transceiver Manager Implementation
+ * 
+ * This file contains the implementation of the NRF24Manager class, providing
+ * low-level hardware control and high-level packet communication interface
+ * for NRF24L01+ wireless modules on AVR microcontrollers.
+ * 
+ * Key features:
+ * - SPI command interface for hardware register access
+ * - GPIO-based CE (Chip Enable) control
+ * - FIFO packet buffering (TX/RX)
+ * - Auto-acknowledgment with payload feedback
+ * - Dynamic or fixed-size payload modes
+ * - RX pipe multiplexing (6 receive pipes)
+ * 
+ * Hardware Communication:
+ * - SPI: Command/data transfer to NRF24 registers and FIFOs
+ * - GPIO: CE pin for RF activation, CSN for SPI chip select
+ * 
+ * Status Register:
+ * - Bit 6: RX_DR (Data Ready interrupt)
+ * - Bit 5: TX_DS (Data Sent interrupt)
+ * - Bit 4: MAX_RT (Max Retransmits interrupt)
+ * - Bits 3-1: RX_P_NO (RX pipe number with data)
+ * - Bit 0: TX_FULL (TX FIFO full flag)
+ * 
+ * 
+ * @see nrf24mgr.h for public interface documentation
+ */
 
 // AVR
 #include <avr/interrupt.h>
@@ -26,8 +56,12 @@
 // include files
 #include "nrf24mgr.h"
 
-//-----------------------------------------------------------------------------------------
-// Register
+//=========================================================================================
+// HARDWARE REGISTER DEFINITIONS
+// Memory-mapped register addresses and bit positions for NRF24L01+ control
+// Communication is via SPI: Read command (R_REGISTER | addr) or Write command (W_REGISTER | addr)
+//=========================================================================================
+// Register Addresses
 
 // CONFIG: configuration register
 #define CONFIG_REG 0x00
@@ -53,8 +87,11 @@
 // EN_RXADDR: enable RX addresses
 #define EN_RXADDR_REG 0x02
 
-// SETUP_AW: seup of address widths
+// SETUP_AW: setup of address widths
 #define SETUP_AW_REG 0x03
+#define SETUP_AW_REG_AW_3BYTES 0x01
+#define SETUP_AW_REG_AW_4BYTES 0x02
+#define SETUP_AW_REG_AW_5BYTES 0x03
 
 // SETUP_RETR: setup of automatic retransmission
 #define SETUP_RETR_REG 0x04
@@ -64,15 +101,17 @@
 
 // RF_SETUP: RF setup register
 #define RF_SETUP_REG 0x06
+#define RF_SETUP_REG_CONT_WAVE 7
 #define RF_SETUP_REG_RF_DR_LOW 5
+#define RF_SETUP_REG_PLL_LOCK 4
+#define RF_SETUP_REG_RF_DR_HIGH 3
 
-// STATUS: status register
-#define STATUS_REG 0x07
-#define STATUS_REG_RX_DR 6
-#define STATUS_REG_TX_DS 5
-#define STATUS_REG_MAX_RT 4
-#define STATUS_REG_RX_P_NO 1
-#define STATUS_REG_TX_FULL 0
+#define RF_SETUP_REG_RF_PWR_0dBm 0x06
+#define RF_SETUP_REG_RF_PWR_6dBm 0x04
+#define RF_SETUP_REG_RF_PWR_12dBm 0x02
+#define RF_SETUP_REG_RF_PWR_18dBm 0x00
+
+
 
 #define OBSERVE_TX_REG 0x08
 #define RPD_REG 0x09
@@ -80,19 +119,20 @@
 // pipe address
 #define RX_ADDR_P0_REG 0x0A
 #define RX_ADDR_P1_REG 0x0B
+#define RX_ADDR_P2_REG 0x0C
+#define RX_ADDR_P3_REG 0x0D
+#define RX_ADDR_P4_REG 0x0E
+#define RX_ADDR_P5_REG 0x0F
 #define TX_ADDR_REG 0x10
 
 // receive buffer
 #define RX_PW_P0_REG 0x11
 #define RX_PW_P1_REG 0x12
+#define RX_PW_P2_REG 0x13
+#define RX_PW_P3_REG 0x14
+#define RX_PW_P4_REG 0x15
+#define RX_PW_P5_REG 0x16
 
-// FIFO_STATUS: FIFO status register
-#define FIFO_STATUS_REG 0x17
-#define FIFO_STATUS_REG_TX_REUSE 6
-#define FIFO_STATUS_REG_FIFO_FULL 5
-#define FIFO_STATUS_REG_TX_EMPTY 4
-#define FIFO_STATUS_REG_RX_FULL 1
-#define FIFO_STATUS_REG_RX_EMPTY 0
 
 // DYNPD: enable dynamic payload length
 #define DYNPD_REG 0x1C
@@ -108,8 +148,11 @@
 #define FEATURE_REG_EN_DPL 2
 #define FEATURE_REG_EN_ACK_PAY 1
 #define FEATURE_REG_EN_DYN_ACK 0
-//-----------------------------------------------------------------------------------------
-// SPI commands
+
+//=========================================================================================
+// NRF24L01+ COMMAND DEFINITIONS
+// Low-level commands sent over SPI to interact with NRF24L01+ hardware
+//=========================================================================================
 #define NRF24CMD_ADDRESS_MASK 0x1F /* 000A AAAA */
 #define NRF24CMD_R_REGISTER 0x00
 #define NRF24CMD_W_REGISTER 0b00100000
@@ -118,50 +161,60 @@
 #define NRF24CMD_FLUSH_TX 0b11100001
 #define NRF24CMD_FLUSH_RX 0b11100010
 #define NRF24CMD_REUSE_TX_PL 0b11100011
-//#define NRF24CMD_ACTIVATE 0b01010000
+#define NRF24CMD_ACTIVATE 0b01010000 // only on non + variants, not needed for our purposes
 #define NRF24CMD_R_RX_PL_WID 0b01100000
 #define NRF24CMD_ACK_PAYLOAD_MASK 0b00000111
 #define NRF24CMD_W_ACK_PAYLOAD 0b10101000 /* 1010 1PPP | PPP = pipe number */
 #define NRF24CMD_W_TX_PAYLOAD_NOACK 0b10110000
 #define NRF24CMD_NOP 0xFF
 
-//-----------------------------------------------------------------------------------------
-// RADIO address
-uint8_t radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe4};
-uint8_t tx_radio_address[5] = {0xe5, 0xe6, 0xe7, 0xe8, 0xe4};
+//=========================================================================================
+// RADIO ADDRESS CONFIGURATION
+// These addresses determine which node can communicate with this module.
+// For auto-acknowledgment to work, RX_ADDR_P0 must match the transmitter's TX_ADDR.
+//=========================================================================================
+// RADIO address (5 bytes) - addresses must match between sender and receiver
+// tx_radio_address is used for RX_ADDR_P0 and TX_ADDR
+// radio_address is used for RX_ADDR_P1
+static uint8_t radio_address[5] = {'1', 'N', 'o', 'd', 'e'}; // 5-byte address for both TX and RX (must match for auto-ack to work)
+static uint8_t tx_radio_address[5] = {'2', 'N', 'o', 'd', 'e'};
 
+/**
+ * @brief Set CE (Chip Enable) pin LOW
+ * 
+ * Disables RF receiver and stops transmission. Used internally to
+ * control module operating state.
+ */
 void NRF24Manager::celow() { GPIO_SET_LOW(NRF24_CX_PIN_PORT, this->_ce_pin); }
 
+/**
+ * @brief Set CE (Chip Enable) pin HIGH
+ * 
+ * Activates RF receiver (if in RX mode) or initiates transmission (if in TX mode).
+ * Used internally to control module operating state.
+ */
 void NRF24Manager::cehigh() { GPIO_SET_HIGH(NRF24_CX_PIN_PORT, this->_ce_pin); }
-
-//-------------------------------------------------------------------------------------
-// R/W Register Functions
-// These low-level functions handle SPI communication with the NRF24L01 module
 
 /**
  * @brief Send SPI command to NRF24 module
  * 
- * @param cmd Command byte to send (includes opcode and register address)
- * @param data Pointer to data buffer for read/write operations
- * @param size Number of bytes to read/write (0 for command-only operations)
- * @return Status register value from NRF24 (returned during first SPI byte)
+ * Low-level SPI communication primitive. Handles CS selection, command
+ * transmission, data transfer, and CS deselection.
  * 
+ * @param cmd SPI command byte
+ * @param data Pointer to data buffer (command payload)
+ * @param size Number of bytes in data buffer
+ * 
+ * @return STATUS register value returned during SPI transaction
  */
 uint8_t NRF24Manager::send_spi(uint8_t cmd, uint8_t *data, uint8_t size) {
   uint8_t exchange = cmd;
 
   this->_spi->begin(this->_cs_pin);
-  // sendCommand() returns boolean (master/slave indicator)
-  bool isMaster = this->_spi->sendCommand(exchange);
-  if (!isMaster) {
-    // If we're a slave, we won't get the status byte back during the command exchange
-    return 0;
-  }
+  this->_spi->sendCommand(exchange);
   
   if (size > 0) {
-    uint8_t *indata = (uint8_t *) malloc(size);
     this->_spi->sendCommandData(size, data);
-    free(indata);
   }
   this->_spi->end(this->_cs_pin);
 
@@ -169,49 +222,92 @@ uint8_t NRF24Manager::send_spi(uint8_t cmd, uint8_t *data, uint8_t size) {
 }
 
 /**
- * @brief Write to NRF24 register
+ * @brief Write to a NRF24 hardware register
  * 
- * @param reg Register address (will be ORed with W_REGISTER command 0x20)
- * @param data Pointer to data bytes to write
+ * Sends a write command to the specified register address via SPI.
+ * 
+ * @param reg Register address to write to
+ * @param data Pointer to bytes to write
  * @param size Number of bytes to write
- * @return Status register value
+ * 
+ * @return STATUS register value at time of write
  */
 uint8_t NRF24Manager::writeRegister(uint8_t reg, uint8_t *data, uint8_t size) {
   uint8_t status = this->send_spi(NRF24CMD_W_REGISTER | reg, data, size);
-  _delay_ms(10);  // Allow register write to settle
   return status;  // Return statement was after delay
 }
 
 /**
- * @brief Read from NRF24 register
+ * @brief Read a hardware register value
  * 
- * @param reg Register address (will be ORed with R_REGISTER command 0x00)
- * @param data Pointer to buffer where read data will be stored
- * @param size Number of bytes to read
- * @return Status register value
+ * Low-level function to read NRF24L01+ hardware registers. Useful for
+ * diagnostics and advanced configuration.
+ * 
+ * @param reg Register address (0x00-0x1D)
+ * @param data Pointer to buffer to receive register contents
+ * @param size Number of bytes to read from register
+ * 
+ * @return STATUS register value at time of read
+ * 
+ * @note Public access for diagnostics only; most users should use higher-level APIs
+ * 
+ * @see writeRegister() (private)
  */
 uint8_t NRF24Manager::readRegister(uint8_t reg, uint8_t *data, uint8_t size) {
   return this->send_spi(NRF24CMD_R_REGISTER | reg, data, size);
 }
 
-//-------------------------------------------------------------------------------------
-// SPI initialization and NRF24 configuration
 /**
- * @brief Initialize NRF24L01 module
+ * @brief Set the destination address for TX operations
  * 
- * Complete initialization sequence including:
- *  - GPIO setup for CE and CSN pins
- *  - Power-up sequence with proper delays
- *  - Register configuration (data rate, CRC, address format, etc.)
- *  - RX/TX pipe setup
- *  - Dynamic payload configuration
+ * Configures the TX address where packets will be sent. For auto-acknowledgment
+ * to function correctly, this address must match the receiver's RX_ADDR_P0.
  * 
- * @param s Pointer to SPIManager instance for SPI communication
- * @param ce_pin GPIO pin number for CE (Chip Enable) control
- * @param cs_pin GPIO pin number for CS (Chip Select) control
+ * @param address Pointer to 5-byte destination address array
  * 
- * IMPORTANT: NRF24L01+ requires 3.3V supply with bypassing capacitor.
- * On 5V Arduino platforms, logic level conversion is required!
+ * @note Call it before init() to set the address during initialization.
+ * @note RX_ADDR_P0 is automatically set to match TX address for ACK reception
+ */
+void NRF24Manager::setDestinationAddress(const char address[5]) {
+  memcpy(tx_radio_address, address, 5);
+}
+
+/**
+ * @brief Set this module's RX listening address
+ * 
+ * Configures the address this module listens on for incoming packets
+ * (RX_ADDR_P1). This address is used for data reception.
+ * 
+ * @param address Pointer to 5-byte local address array
+ * 
+ * @note Call it before init() to set the address during initialization.
+ */
+void NRF24Manager::setMyAddress(const char address[5]) {
+  memcpy(radio_address, address, 5);
+}
+
+/**
+ * @brief Initialize and configure the NRF24L01+ module
+ * 
+ * Performs complete hardware initialization including:
+ * - GPIO configuration (CE, CSN pins)
+ * - SPI setup via SPIManager
+ * - Module power-up and stabilization (200ms delay)
+ * - Auto-acknowledgment configuration
+ * - Address setup (RX/TX)
+ * - FIFO configuration
+ * - RF channel, data rate, and power settings
+ * - Dynamic payload enablement (if configured)
+ * 
+ * @param s Pointer to initialized SPIManager instance for SPI communication
+ * @param ce_pin GPIO pin number connected to NRF24 CE (Chip Enable)
+ * @param cs_pin GPIO pin number connected to NRF24 CSN (SPI Chip Select)
+ * 
+ * @note This must be called before any other operations
+ * @note Critical 200ms stabilization delay is applied after power-up
+ * @note Module is left in RX mode (CE=HIGH) after initialization
+ * 
+ * @warning Ensure SPIManager is already initialized before calling this
  */
 void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
   this->_ce_pin = ce_pin;
@@ -219,18 +315,7 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
   this->_spi = s;
 
 #ifdef HAS_INT0
-  // TODO: Rewrite for PB0 PCINT0 interrupt support
   cli(); // Disable interrupts for critical section
-#if defined(__AVR_ATmega8535__)
-  // ATmega8535 uses GICR and different ISC bits
-  // MCUCR |= (1 << ISC01); // The falling edge of INT0 generates an interrupt
-  // GICR |= (1 << INT0); // INT0 is on PIN 16 PD2
-#else
-  // ATmega328/168 (Arduino Uno) uses EICRA and EIMSK
-  EICRA |= (1 << ISC01); // INT0 on falling edge generates interrupt request
-  EIMSK |= (1 << INT0);  // Enable INT0 (located on PD2/PIN2)
-#endif
-  sei(); // Re-enable interrupts
 #endif
 
   // Configure CE pin as output and set LOW (disable transmit/receive)
@@ -241,7 +326,96 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
   // Extended delay recommended for slower AVR designs
   _delay_ms(200);
 
-  // ===== PHASE 1: Initial CONFIG register setup =====
+  // local variable for command construction,
+  // data are modifiied in-place for SPI transfer, so we use this variable to not override the original data buffers
+  uint8_t cmd = 0;
+
+  // ===== Auto-Acknowledgment Setup =====
+  // Enhanced ShockBurst: automatic ACK on received packets
+  cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
+        (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
+        (1 << EN_AA_REG_ENAA_P1) | (1 << EN_AA_REG_ENAA_P0);
+  this->writeRegister(EN_AA_REG, &cmd, 1);
+  _delay_ms(2);
+  
+  // ===== Address Setup =====
+  cmd = SETUP_AW_REG_AW_5BYTES;
+  this->writeRegister(SETUP_AW_REG, &cmd, 1);
+  _delay_ms(2);
+
+  // ===== Automatic Retransmission Setup =====
+  // ARD (Auto Retransmit Delay) and ARC (Auto Retransmit Count)
+  cmd = 0x41; // ARD=0011 (ARD*250µs delay), ARC=0001 (1 retry attempt)
+  this->writeRegister(SETUP_RETR_REG, &cmd, 1);
+  _delay_ms(2);
+
+  // ===== RF Channel Configuration =====
+  // Channel frequency = 2400 + RF_CH (MHz)
+  // Valid range: 0-125 (2400-2525 MHz) with 25 channels available in most regions
+  cmd = 1; // Channel 100 (2500 MHz, center of 2.4GHz band)
+  this->writeRegister(RF_CH_REG, &cmd, 1);
+  _delay_ms(2);
+
+  // ===== RF Setup (Data Rate and TX Power) =====
+  // Default configuration for 1 Mbps (00) (01 for 2 Mbps, 10 for 250 kbps)
+  cmd = (0 << RF_SETUP_REG_RF_DR_LOW) | (1 << RF_SETUP_REG_RF_DR_HIGH) | RF_SETUP_REG_RF_PWR_0dBm;
+  this->writeRegister(RF_SETUP_REG, &cmd, 1);
+  _delay_ms(2);
+
+  // ===== Set RX/TX Addresses =====
+  // P0 is used for both RX (when listening) and TX acks
+  // TX_ADDR must match RX_ADDR_P0 for auto-ack to work correctly
+  this->writeRegister(RX_ADDR_P1_REG, radio_address, 5);
+  uint8_t poaddr[5];
+  memcpy(poaddr, tx_radio_address, 5);
+  this->writeRegister(RX_ADDR_P0_REG, poaddr, 5);
+  this->writeRegister(TX_ADDR_REG, tx_radio_address, 5);
+  _delay_ms(2);
+
+  // ===== Enable RX Pipes =====
+  // Only enable pipe 0 & 1 (bits correspond to pipes P0-P5)
+  cmd = 0x03;
+  this->writeRegister(EN_RXADDR_REG, &cmd, 1);
+  _delay_ms(2);
+
+  // ===== Set Payload Size =====
+  if (this->_payloadSize > NRF24_MAX_MESSAGE_SIZE) {
+    this->_payloadSize = NRF24_MAX_MESSAGE_SIZE;
+  }
+
+  if (this->_payloadSize == 0) {
+    this->_payloadSize = 1;
+  }
+
+  if (this->isDynamicPayload()) {
+    // Enable dynamic payload length in FEATURE register
+    cmd = (1 << FEATURE_REG_EN_DPL | 1 << FEATURE_REG_EN_ACK_PAY); // Enable DPL and ACK payloads
+    this->writeRegister(FEATURE_REG, &cmd, 1);
+    _delay_ms(2);
+
+    // Enable dynamic payload on pipes 0 and 1
+    cmd = (1 << DYNPD_REG_DPL_P0) | (1 << DYNPD_REG_DPL_P1);
+    this->writeRegister(DYNPD_REG, &cmd, 1);
+    _delay_ms(2);
+  } else {
+    // set size
+    cmd = this->_payloadSize;
+    this->writeRegister(RX_PW_P0_REG, &cmd, 1);
+    _delay_ms(2);
+    cmd = this->_payloadSize;
+    this->writeRegister(RX_PW_P1_REG, &cmd, 1);
+    _delay_ms(2);
+    
+    // ===== Disable Dynamic Payload on Pipes =====
+    cmd = 0;
+    this->writeRegister(DYNPD_REG, &cmd, 1);
+    _delay_ms(2);
+    cmd = 0;
+    this->writeRegister(FEATURE_REG, &cmd, 1);
+    _delay_ms(2);
+  }
+
+  // ===== Initial CONFIG register setup =====
   // Disable interrupt, enable CRC mode, and power up the module in RX mode by default
   uint8_t config =
       (1 << CONFIG_REG_MASK_RX_DR) |  
@@ -252,118 +426,22 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
       (1 << CONFIG_REG_PWR_UP) |      
       (1 << CONFIG_REG_PRIM_RX);
       
-  uint8_t cmd = config;
-  uint8_t status = this->writeRegister(CONFIG_REG, &cmd, 1);
-  // check status register for expected value (0x00 or 0x01 depending if TX FIFO is full) to verify communication
-  if ((status & 0xE0) != 0) {
-    // If any of the RX_DR, TX_DS, or MAX_RT flags are set, initialization may have failed
-    // This could indicate a communication issue with the NRF24 module
-    // Consider adding error handling or retry logic here
-
-    // wait and retry
-    _delay_ms(200);
-    cmd = config;
-    status = this->writeRegister(CONFIG_REG, &cmd, 1);
-  }
-  
-  // Allow settling time after CONFIG write
-  _delay_ms(2);
-
-  // ===== PHASE 2: Auto-Acknowledgment Setup =====
-  // Enhanced ShockBurst: automatic ACK on received packets
-  if (this->_autoack) {
-    // Enable AutoACK only on pipe 0 (used for both RX and TX)
-    cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
-          (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
-          (0 << EN_AA_REG_ENAA_P1) | (1 << EN_AA_REG_ENAA_P0);
-  } else {
-    // Disable AutoACK on all pipes
-    cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
-          (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
-          (0 << EN_AA_REG_ENAA_P1) | (0 << EN_AA_REG_ENAA_P0);
-  }
-  this->writeRegister(EN_AA_REG, &cmd, 1);
-
-  // ===== PHASE 3: Address Setup =====
-  // NOTE: Address width set to 3 bytes, but addresses defined as 5 bytes!
-  // This is likely a bug - either use 5-byte addresses or change this to 0x03
-  cmd = 0x01; // Address width: 00=illegal, 01=3 bytes, 10=4 bytes, 11=5 bytes
-  this->writeRegister(SETUP_AW_REG, &cmd, 1);
-
-  // ===== PHASE 4: Automatic Retransmission Setup =====
-  // ARD (Auto Retransmit Delay) and ARC (Auto Retransmit Count)
-  if (this->_autoack) {
-    cmd = 0xF1; // ARD=1111 (4000µs delay), ARC=0001 (1 retry attempt)
-  } else {
-    cmd = 0xF0; // ARD=1111 (4000µs delay), ARC=0000 (no retries)
-  }
-  this->writeRegister(SETUP_RETR_REG, &cmd, 1);
-
-  // ===== PHASE 5: RF Channel Configuration =====
-  // Channel frequency = 2400 + RF_CH (MHz)
-  // Valid range: 0-125 (2400-2525 MHz) with 25 channels available in most regions
-  cmd = 0x10; // Channel 7: 2407 MHz (middle of ISM band)
-  this->writeRegister(RF_CH_REG, &cmd, 1);
-
-  // ===== PHASE 6: RF Setup (Data Rate and TX Power) =====
-  // Default configuration for 250 kbps with max TX power
-  cmd = (1 << RF_SETUP_REG_RF_DR_LOW) | // RF_DR_LOW=1 → 250 kbps (low power mode)
-        0x06; // TX_PWR=11 → 0 dBm (maximum TX power)
-  this->writeRegister(RF_SETUP_REG, &cmd, 1);
-
-  // ===== PHASE 7: Clear STATUS Flags =====
-  // Write 1 to STATUS bits to clear any pending interrupts
-  cmd = (1 << STATUS_REG_RX_DR) |  // Clear RX_DR flag
-        (1 << STATUS_REG_TX_DS) |  // Clear TX_DS flag
-        (1 << STATUS_REG_MAX_RT);  // Clear MAX_RT flag
-  this->writeRegister(STATUS_REG, &cmd, 1);
-
-  // ===== PHASE 8: Dynamic Payload Setup =====
-  // Enable variable-length payload packets
-  if (this->_autoack) {
-    // Enable Dynamic Payload Length, ACK Payload, and Dynamic ACK
-    cmd = (1 << FEATURE_REG_EN_DPL) | (1 << FEATURE_REG_EN_ACK_PAY) |
-          (1 << FEATURE_REG_EN_DYN_ACK);
-  } else {
-    // Only enable Dynamic Payload Length
-    cmd = (1 << FEATURE_REG_EN_DPL) | (0 << FEATURE_REG_EN_ACK_PAY) |
-          (0 << FEATURE_REG_EN_DYN_ACK);
-  }
-  this->writeRegister(FEATURE_REG, &cmd, 1);
-
-  // ===== PHASE 9: Enable Dynamic Payload on Pipes =====
-  // Only pipe 0 enabled for RX (pipe pairs: P0/P1, P2/P3, P4/P5)
-  // NOTE: This limits the driver to single-pipe operation
-  cmd = (1 << DYNPD_REG_DPL_P0) | (0 << DYNPD_REG_DPL_P1) |
-        (0 << DYNPD_REG_DPL_P2) | (0 << DYNPD_REG_DPL_P3) |
-        (0 << DYNPD_REG_DPL_P4) | (0 << DYNPD_REG_DPL_P5);
-  this->writeRegister(DYNPD_REG, &cmd, 1);
-
-  // ===== PHASE 10: Set RX/TX Addresses =====
-  // P0 is used for both RX (when listening) and TX acks
-  // TX_ADDR must match RX_ADDR_P0 for auto-ack to work correctly
-  this->writeRegister(RX_ADDR_P0_REG, radio_address, 5);
-  this->writeRegister(TX_ADDR_REG, tx_radio_address, 5);
-
-  // ===== PHASE 11: Enable RX Pipes =====
-  // Only enable pipe 0 (bits correspond to pipes P0-P5)
-  cmd = 0x01; // Binary: 000001 → Enable P0 only
-  this->writeRegister(EN_RXADDR_REG, &cmd, 1);
-
-  // ===== PHASE 12: Flush FIFOs and Clear Interrupts =====
-  // Remove any stale data and ensure clean state
-  uint8_t flush_cmd = NRF24CMD_FLUSH_RX;
-  this->writeRegister(flush_cmd, 0, 0);
-  flush_cmd = NRF24CMD_FLUSH_TX;
-  this->writeRegister(flush_cmd, 0, 0);
-
-  // ===== PHASE 13: Stability Re-check and CONFIG Verification =====
-  // Some nRF24 modules are unstable during initial startup; verify and retry if needed
   cmd = config;
-  this->writeRegister(CONFIG_REG, &cmd, 1);
+  uint8_t status = this->writeRegister(CONFIG_REG, &cmd, 1);
+  // For nRF24L01+ to go from power down mode to TX or RX mode it must first pass through stand-by mode.
+  // There must be a delay of Tpd2stby (see Table 16.) after the nRF24L01+ leaves power down mode before
+  // the CE is set high. - Tpd2stby can be up to 5ms per the 1.0 datasheet
+  _delay_ms(5);
 
-  // Allow settling time after power-up
-  _delay_ms(2);
+  // check status for IRQ flags that may indicate issues with SPI communication
+  if (status & ((1 << STATUS_REG_RX_DR) | (1 << STATUS_REG_TX_DS) | (1 << STATUS_REG_MAX_RT))) {
+     // Write 1 to STATUS bits to clear any pending interrupts
+    cmd = (1 << STATUS_REG_RX_DR) |  // Clear RX_DR flag
+          (1 << STATUS_REG_TX_DS) |  // Clear TX_DS flag
+          (1 << STATUS_REG_MAX_RT);  // Clear MAX_RT flag
+    this->writeRegister(STATUS_REG, &cmd, 1);
+    _delay_ms(2);
+  }
 
   // Read back CONFIG register to verify it was written correctly
   uint8_t config_register;
@@ -372,211 +450,161 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
   // If mismatch detected, add delay and retry (handles unstable modules)
   if (config != config_register) {
     _delay_ms(500);
-    this->writeRegister(CONFIG_REG, &config, 1);
+    cmd = config;
+    this->writeRegister(CONFIG_REG, &cmd, 1);
+    // NRF24 needs some time after power up to be stable
+    _delay_ms(5);
   }
-                                           // 0 for transmit)
-  // NRF24 needs some time after power up to be stable
-  _delay_ms(2);
+  this->flushRX(); // Clear RX FIFO in case it contains any stale data from power-up
+  this->flushTX(); // Clear TX FIFO in case it contains any stale data from power-up
+ 
+  this->cehigh(); // Ensure CE is HIGH to enable RF receiver (module is now actively listening for packets)
+
+  #ifdef HAS_INT0
+  sei(); // Re-enable interrupts
+  #endif
 }
 
-//-------------------------------------------------------------------------------------
-// Change NRF24 Operating State
 /**
- * @brief Change the operational state of the NRF24 module
+ * @brief Clear all pending RX packets from FIFO
  * 
- * Manages transitions between power and operating modes.
+ * Flushes the RX FIFO, discarding all received packets that haven't been
+ * read yet. Useful for clearing stale data before switching modes.
  * 
- * States:
- *   - NRF24_POWERUP: Power on the module (1.5ms startup time)
- *   - NRF24_POWERDOWN: Power off to reduce consumption
- *   - NRF24_RECEIVE: Enable RX mode (PRIM_RX=1, CE will be set to high by listen())
- *   - NRF24_TRANSMIT: Enable TX mode (PRIM_RX=0)
- *   - NRF24_STANDBY1: CE low (no transmit/receive active)
- *   - NRF24_STANDBY2: TX standby (CE high, PRIM_RX=0)
+ * @note Should be called before entering RX mode or after changeState()
+ */
+void NRF24Manager::flushRX() {
+  this->send_spi(NRF24CMD_FLUSH_RX, 0, 0);
+}
+
+/**
+ * @brief Clear all pending TX packets from FIFO
  * 
- * @param state Target state (see NRF24Manager.h for state defines)
+ * Flushes the TX FIFO, discarding all unsent packets. Useful for clearing
+ * queued transmissions before changing modes or recovering from errors.
+ */
+void NRF24Manager::flushTX() {
+  this->send_spi(NRF24CMD_FLUSH_TX, 0, 0);
+}
+
+/**
+ * @brief Change the module operating state (RX/TX mode)
  * 
- * NOTE: Always allow status register to settle after state changes
+ * Switches between receive and transmit modes, or initializes the module.
+ * 
+ * @param state Operating state: NRF24_RECEIVE, or NRF24_TRANSMIT
+ * 
+ * @note NRF24_RECEIVE: Enables RF receiver, listens on configured RX addresses
+ * @note NRF24_TRANSMIT: Disables receiver, prepares module for packet transmission
+ * @note Module must be initialized (init) before changing states
+ * @note Dynamic payload must be enabled before setting this state
+ * 
+ * @see NRF24_RECEIVE, NRF24_TRANSMIT
  */
 void NRF24Manager::changeState(uint8_t state) {
-  if (this->_state == state) {
-    return;  // Already in target state
-  }
-
   uint8_t config_register, data;
   this->readRegister(CONFIG_REG, &config_register, 1);
 
   switch (state) {
-  case NRF24_POWERUP:
-    // Check if already powered up
-    if (!(config_register & (1 << CONFIG_REG_PWR_UP))) {
-      data = config_register | (1 << CONFIG_REG_PWR_UP);
-      this->writeRegister(CONFIG_REG, &data, 1);
-      // CRITICAL: NRF24 needs 1.5ms minimum from POWERDOWN to operational
-      _delay_ms(2);
-    }
-    break;
-  case NRF24_POWERDOWN:
-    // Clear PWR_UP bit to reduce current consumption to ~22µA
-    data = config_register & ~(1 << CONFIG_REG_PWR_UP);
-    this->writeRegister(CONFIG_REG, &data, 1);
-    break;
   case NRF24_RECEIVE:
+    if (config_register & (1 << CONFIG_REG_PRIM_RX)) {
+      return; // Already in receive mode
+    }
+    this->celow();  // Ensure CE is LOW before changing mode
     // Set PRIM_RX=1 for receive mode
     data = config_register | (1 << CONFIG_REG_PRIM_RX);
     this->writeRegister(CONFIG_REG, &data, 1);
+    _delay_ms(1);
     // Clear all status flags before entering RX
     data = (1 << STATUS_REG_RX_DR) | (1 << STATUS_REG_TX_DS) |
            (1 << STATUS_REG_MAX_RT);
     this->writeRegister(STATUS_REG, &data, 1);
-    _delay_ms(1);  // Allow mode transition to complete
+    this->cehigh();  // Enable RF receiver
+    _delay_us(150);  // wait 130 us before using
     break;
   case NRF24_TRANSMIT:
+    if (!(config_register & (1 << CONFIG_REG_PRIM_RX))) {
+      return; // Already in transmit mode
+    }
+    this->celow();  // Ensure CE is LOW for transmit mode
     // Set PRIM_RX=0 for transmit mode
     data = config_register & ~(1 << CONFIG_REG_PRIM_RX);
     this->writeRegister(CONFIG_REG, &data, 1);
-    // Clear all status flags before entering TX
-    data = (1 << STATUS_REG_RX_DR) | (1 << STATUS_REG_TX_DS) |
-           (1 << STATUS_REG_MAX_RT);
-    this->writeRegister(STATUS_REG, &data, 1);
-    _delay_ms(1);  // Allow mode transition to complete
-    break;
-  case NRF24_STANDBY1:
-    // Pull CE low to stop transmit/receive
-    this->celow();
-    break;
-  case NRF24_STANDBY2:
-    // TX standby: CE high with PRIM_RX=0
-    data = config_register & ~(1 << CONFIG_REG_PRIM_RX);
-    this->writeRegister(CONFIG_REG, &data, 1);
-    this->cehigh();
-    _delay_us(150);  // Setup time for CE transition
+    
+    _delay_ms(1);
     break;
   }
-
-  this->_state = state;
-}
-
-//-------------------------------------------------------------------------------------
-// Receive Mode Operations
-
-/**
- * @brief Activate receive mode and prepare to listen for incoming data
- * 
- * Configures the module to receive mode and enables the radio receiver.
- * This should be called whenever you want to start listening for packets.
- * 
- * TIMING: CE must stay high for ≥130µs to start receiving
- */
-void NRF24Manager::listen(void) {
-  this->changeState(NRF24_RECEIVE); // Set PRIM_RX=1, clear status flags
-  // Note: If AUTO_ACK enabled, could write ACK payload here: nrf24_write_ack()
-  this->cehigh();                    // Enable receiver (must stay high to receive)
-  _delay_us(150);                    // Setup time (≥130µs min)
 }
 
 /**
- * @brief Check if data is available to receive
+ * @brief Check if data is available in RX FIFO
  * 
- * @return 1 if data in RX FIFO, 0 if empty
+ * Reads the STATUS register to determine which RX pipe has data waiting.
+ * Used to poll for incoming packets without blocking.
  * 
- * Reads FIFO_STATUS register and checks RX_EMPTY bit
- * Note: This check is non-blocking
+ * @return Pipe number (0-1) if data is available, -1 if FIFO is empty
+ * 
+ * @note Non-blocking function. Returns immediately.
+ * @note Call read_binary_message() to retrieve the actual packet data
+ * 
+ * @see read_binary_message()
  */
-uint8_t NRF24Manager::dataAvailable(void) {
+int8_t NRF24Manager::dataAvailable(void) {
   uint8_t fifo;
-  this->readRegister(FIFO_STATUS_REG, &fifo, 1);
+  uint8_t status = this->readRegister(FIFO_STATUS_REG, &fifo, 1);
   // RX_EMPTY bit (bit 0): 1=empty, 0=has data
-  if (!(fifo & (1 << FIFO_STATUS_REG_RX_EMPTY))) {
-    return 1;
+  bool dataAvailable = ((fifo & (1 << FIFO_STATUS_REG_RX_EMPTY)) == 0); // Also check RX_DR flag in STATUS for pending data
+  if (dataAvailable) {
+    int8_t p = (status >> STATUS_REG_RX_P_NO_START_BIT) & 0x07; // Extract pipe number (bits 3-1)
+    return p;
   }
-  return 0;
+
+  return -1;
 }
 
 /**
- * @brief Send automatic acknowledgment payload
+ * @brief Read a received packet from RX FIFO
  * 
- * Loads an ACK with data into the TX FIFO for pipe 0
- * Used in AutoACK mode with dynamic payload
+ * Retrieves the oldest packet from the RX FIFO. The packet length is
+ * automatically determined if dynamic payload is enabled, otherwise uses
+ * the configured payload size.
  * 
- * WARNING: This function is incomplete - hardcodes "A" as payload
- */
-void NRF24Manager::ack() {
-  const char *ack = "A";
-  unsigned int length = 1;
-  this->_spi->begin(this->_cs_pin);
-  this->_spi->send(NRF24CMD_W_ACK_PAYLOAD);
-  while (length--)
-    this->_spi->send(*(uint8_t *)ack++);
-  this->_spi->end(this->_cs_pin);
-}
-
-/**
- * @brief Read text message from RX FIFO (NUL-terminated string)
+ * @param[out] length Reference to byte variable that receives packet length.
+ *                    Contains valid length only if return value is not NULL.
  * 
- * @return Pointer to received message (static buffer), or NULL if empty
+ * @return Pointer to packet data buffer, or NULL if FIFO is empty.
+ *         Buffer size is determined by length parameter.
  * 
- * IMPORTANT ISSUE: Uses static buffer that gets overwritten on next call!
- * This means:
- *   1. Data is lost after next read_message() or read_binary_message() call
- *   2. Thread-unsafe (if used in interrupt context)
- *   3. Application must copy message immediately if needed
+ * @note Packet buffer is valid until next read_binary_message() call
+ * @note Call dataAvailable() first to verify data exists
  * 
- */
-const char *NRF24Manager::read_message() {
-  // Message placeholder - STATIC (persists between calls, gets overwritten)
-  static char rx_message[NRF24_MAX_MESSAGE_SIZE];
-  memset(rx_message, 0, NRF24_MAX_MESSAGE_SIZE);
-
-  // BUG: Write ACK message call is commented out
-  // Uncomment if using AutoACK with payloads: this->ack();
-
-  // Get length of incoming message using R_RX_PL_WID command
-  uint8_t data = 0;
-  this->readRegister(NRF24CMD_R_RX_PL_WID, &data, 1);
-
-  // Read message from RX FIFO
-  if (data > 0) {
-    // BUZ: data+1 might be larger than NRF24_MAX_MESSAGE_SIZE!
-    this->send_spi(NRF24CMD_R_RX_PAYLOAD, (uint8_t *)&rx_message, data + 1);
-  }
-  
-  // Clear RX_DR interrupt flag by writing 1 to it
-  data = (1 << STATUS_REG_RX_DR);
-  this->writeRegister(STATUS_REG, &data, 1);
-
-  // Return message if non-empty, otherwise NULL
-  if (strlen(rx_message) > 0) {
-    return rx_message;
-  }
-
-  return NULL;
-}
-
-/**
- * @brief Read binary message from RX FIFO (variable length)
- * 
- * @param length OUT parameter: receives the size of data read
- * @return Pointer to received data (static buffer), or NULL if empty
- * 
- * IMPORTANT ISSUE: Same as read_message() - uses static buffer!
- * Data is lost after next call.
+ * @see dataAvailable(), send_binary()
  */
 uint8_t* NRF24Manager::read_binary_message(uint8_t& length) {
   // Message placeholder - STATIC (persists between calls, gets overwritten)
   static uint8_t rx_message[NRF24_MAX_MESSAGE_SIZE];
+  this->celow(); // Ensure CE is LOW to read from FIFO (CE must be LOW for SPI access to RX FIFO)
 
-  // Get length of incoming message
-  this->readRegister(NRF24CMD_R_RX_PL_WID, &length, 1);
-
+  // Get length of incoming message using R_RX_PL_WID command
+  // This reads the actual payload width from the next packet in FIFO
+  uint8_t l = 0; // Default to 0 if read fails
+  this->send_spi(NRF24CMD_R_RX_PL_WID, &l, 1);
+  length = l; // Output the length to caller
   // Read message from RX FIFO
   if (length > 0) {
     this->send_spi(NRF24CMD_R_RX_PAYLOAD, rx_message, length);
+  } else {
+    // If length is 0, it may indicate a FIFO corruption issue. Flush RX FIFO to clear it.
+    this->flushRX();
   }
   
-  // Clear RX_DR interrupt flag
+  // Clear RX_DR interrupt flag by writing 1 to it in STATUS register
+  // This signals to the module that we've acknowledged the data
   uint8_t data = (1 << STATUS_REG_RX_DR);
   this->writeRegister(STATUS_REG, &data, 1);
+  _delay_ms(2);
+
+  this->cehigh(); // Return to listening mode (CE HIGH)
 
   // Return data pointer if received, otherwise NULL
   if (length > 0) {
@@ -586,104 +614,94 @@ uint8_t* NRF24Manager::read_binary_message(uint8_t& length) {
   return NULL;
 }
 
-//-------------------------------------------------------------------------------------
-// Transmit Operations
-
 /**
- * @brief Send text message (string)
+ * @brief Configure custom payload to send with ACK packets
  * 
- * @param msg Pointer to NUL-terminated string to send
- * @return 1 on success, 0 on failure
+ * When this module receives a packet with auto-acknowledgment enabled,
+ * it automatically sends back an ACK. This function sets custom data to
+ * be included in that ACK response (max 32 bytes).
  * 
- * Transmit process:
- *  1. Stop RX mode (CE low)
- *  2. Switch to TX mode (PRIM_RX=0)
- *  3. Flush FIFOs to ensure clean state
- *  4. Load message to TX payload register
- *  5. Pulse CE high for ≥10µs to start transmission
- *  6. If no AutoACK: wait for TX_DS flag (transmission done)
+ * @param msg Pointer to data to include in ACK payload
+ * @param length Number of bytes to send in ACK (0-32)
  * 
- * TIMING: TX completes in ~1ms at 250kbps or less
- * NOTE: With AutoACK, function returns immediately after CE pulse
+ * @note Requires EN_ACK_PAY feature to be enabled (automatic with dynamic payload)
+ * @note ACK payload is queued on pipe 1 and persists until overwritten
+ * @note Module must be in RX mode for ACK payload to be sent
+ * 
+ * @see isDynamicPayload()
  */
-uint8_t NRF24Manager::send(const char *msg) {
-  // Message length (strlen for text, but doesn't include NUL terminator)
-  uint8_t length = strlen(msg);
-
-  // Transmit mode: CE low, enter TX mode
-  this->celow();  // Stop any RX activity
-  this->changeState(NRF24_TRANSMIT);
-
-  // Flush TX/RX to remove stale data and clear any pending interrupts
-  this->writeRegister(NRF24CMD_FLUSH_RX, 0, 0);
-  this->writeRegister(NRF24CMD_FLUSH_TX, 0, 0);
-
-  // Commented: Could mask RX interrupt during TX if needed
-  // this->readRegister(CONFIG_REG, &data, 1);
-  // data |= (1 << CONFIG_REG_MASK_RX_DR);
-  // this->writeRegister(CONFIG_REG, &data, 1);
-
-  // Load message into TX_PAYLOAD register (SPI burst mode)
-  this->_spi->begin(this->_cs_pin);
-  this->_spi->send(NRF24CMD_W_TX_PAYLOAD);
-  while (length--)
-    this->_spi->send(*(uint8_t *)msg++);  // Send each character
-  this->_spi->send(0);  // Send NUL terminator
-  this->_spi->end(this->_cs_pin);
-
-  // Send message by pulsing CE high (≥10µs minimum)
-  this->cehigh();
-  _delay_us(15);  // Pulse duration (can go up to 4ms)
-  this->celow();
-
-  // Wait for transmission to complete (only if AutoACK disabled)
-  if (!this->_autoack) {
-    uint8_t data = 0;
-    // Poll STATUS register until TX_DS (TX Data Sent) flag is set
-    this->readRegister(STATUS_REG, &data, 1);
-    while (!(data & (1 << STATUS_REG_TX_DS))) {
-      this->readRegister(STATUS_REG, &data, 1);
-    }
-    // Caller should clear interrupts and return to RX mode
+void NRF24Manager::set_ack_buffer(uint8_t *msg, uint8_t length) {
+  if (length > NRF24_MAX_MESSAGE_SIZE) {
+    length = NRF24_MAX_MESSAGE_SIZE; // Truncate if message exceeds maximum size
+  }
+  if (length == 0) {
+    length = 1; // Minimum payload size is 1 byte
   }
 
-  // Commented: Could re-enable RX interrupt after TX
-  // this->readRegister(CONFIG_REG, &data, 1);
-  // data &= ~(1 << CONFIG_REG_MASK_RX_DR);
-  // this->writeRegister(CONFIG_REG, &data, 1);
+  this->celow(); // Ensure CE is LOW to access SPI and set ACK payload
+  // Load ACK payload into nRF24L01+ for pipe 1 (used for auto-ack)
+  uint8_t cmd = NRF24CMD_W_ACK_PAYLOAD | 0x01; // Pipe 1
+  this->_spi->begin(this->_cs_pin);
+  this->_spi->sendCommand(cmd);
+  
+  // send data
+  while (length--)
+    this->_spi->send(*(uint8_t *)msg++);  // Send raw bytes
+  this->_spi->end(this->_cs_pin);
 
-  // NOTE: Function should ideally return to listen() mode if in RX/TX mode
-  // nrf24_start_listening();
+  this->cehigh(); // Return to listening mode (CE HIGH)
 
-  return 1;
 }
 
 /**
- * @brief Send binary data (arbitrary bytes)
+ * @brief Transmit a binary packet
  * 
- * @param msg Pointer to binary data buffer
- * @param length Number of bytes to send
- * @return 1 on success
+ * Sends a packet to the configured destination address and waits for
+ * auto-acknowledgment. Automatically retransmits on failure (up to configured
+ * retry count).
  * 
- * Similar to send() but accepts arbitrary binary data
- * (not requiring NUL termination)
+ * @param msg Pointer to packet data to transmit
+ * @param length Input: packet size in bytes; Output: actual bytes sent (may differ on error)
  * 
- * Max payload: 32 bytes per NRF24L01+ spec
+ * @return Pointer to any ACK payload received from destination, or NULL if no ACK
+ * 
+ * @note Module must be in NRF24_TRANSMIT state before calling
+ * @note Blocks until transmission completes or max retries exceeded
+ * @note If destination sets an ACK payload, it's returned in the buffer
+ * 
+ * @see set_ack_buffer(), changeState()
  */
-uint8_t NRF24Manager::send_binary(uint8_t *msg, uint8_t length) {
+uint8_t* NRF24Manager::send_binary(uint8_t *msg, uint8_t &length) {
   // Transmit mode: CE low, enter TX mode
   this->celow();  // Stop any RX activity
   this->changeState(NRF24_TRANSMIT);
+  uint8_t* result = NULL;
 
-  // Flush TX/RX to ensure clean state
-  this->writeRegister(NRF24CMD_FLUSH_RX, 0, 0);
-  this->writeRegister(NRF24CMD_FLUSH_TX, 0, 0);
+  // clear status flags to ensure clean state before transmission
+  uint8_t cmd = (1 << STATUS_REG_RX_DR) | (1 << STATUS_REG_TX_DS) |
+                (1 << STATUS_REG_MAX_RT); // Clear all status flags
+  this->writeRegister(STATUS_REG, &cmd, 1);
 
-  // Load binary message to TX_PAYLOAD register (SPI burst)
+  if (!this->isDynamicPayload() && length > this->_payloadSize) {
+    length = this->_payloadSize; // Truncate if message exceeds payload size
+  }
+  if (length > NRF24_MAX_MESSAGE_SIZE) {
+    length = NRF24_MAX_MESSAGE_SIZE; // Truncate if message exceeds maximum size
+  }
+
+  // Load binary message to TX_PAYLOAD register
   this->_spi->begin(this->_cs_pin);
   this->_spi->send(NRF24CMD_W_TX_PAYLOAD);
+  
+  int8_t padding = (this->_payloadSize > 0) ? this->_payloadSize - length : 0;
+
+  // send data
   while (length--)
     this->_spi->send(*(uint8_t *)msg++);  // Send raw bytes
+  // send padding
+  while (padding--)
+    this->_spi->send(0);  // Send padding bytes
+  
   this->_spi->end(this->_cs_pin);
 
   // Send message by pulsing CE high (≥10µs)
@@ -691,87 +709,44 @@ uint8_t NRF24Manager::send_binary(uint8_t *msg, uint8_t length) {
   _delay_us(15);  // Pulse CE for ~15µs
   this->celow();
 
-  // Wait for transmission if AutoACK disabled
-  if (!this->_autoack) {
-    uint8_t data = 0;
-    // Poll STATUS register for TX_DS (transmission complete)
-    this->readRegister(STATUS_REG, &data, 1);
-    while (!(data & (1 << STATUS_REG_TX_DS)))
-      this->readRegister(STATUS_REG, &data, 1);
+  // Wait for transmission to complete by monitoring STATUS register flags
+  uint8_t status = 0;
+  while(!(status & ((1 << STATUS_REG_TX_DS) | (1 << STATUS_REG_MAX_RT)))) {
+    this->readRegister(STATUS_REG, &status, 1);
+  }
+  // clear bits after transmission completes
+  cmd = (1 << STATUS_REG_TX_DS) | (1 << STATUS_REG_MAX_RT); // Clear all status flags
+  this->writeRegister(STATUS_REG, &cmd, 1);
+  _delay_us(10);
+  this->flushTX(); // Clear TX FIFO to prepare for next transmission
+
+  // switch back to receive mode after transmission
+  this->changeState(NRF24_RECEIVE);
+
+  // Check for transmission success or failure
+  if (status & (1 << STATUS_REG_MAX_RT)) {
+    // Transmission failed
+    length = 33; // Indicate failure with special length value (greater than max payload)
+    return NULL;
   }
 
-  return 1;
+  return result;
 }
+
+#ifdef HAS_SERIAL
 
 /**
- * @brief Reset and reconfigure the NRF24 module
+ * @brief Print module information/statistics
  * 
- * @param autoack Enable (1) or disable (0) auto-acknowledgment
+ * Outputs detailed diagnostic information including register contents,
+ * configuration settings, transmission statistics, and FIFO status.
+ * Output format varies depending on HAS_SERIAL compile flag.
  * 
- * Reconfigures key parameters:
- *  - AutoACK setting (affects address width, retry count, etc.)
- *  - CLears FIFO buffers
- *  - Re-configures feature registers
- *  - Does NOT reconfigure power, channel, or address settings
+ * @note Requires serial output support (configured via HAS_SERIAL or HAS_INT0_SERIAL)
+ * @note Non-blocking function
  * 
- * Use this to quickly switch between AutoACK modes or recover from errors
+ * @see summary()
  */
-void NRF24Manager::reset(uint8_t autoack) {
-  this->_autoack = autoack;
-
-  // Flush TX/RX FIFOs to clear any pending data
-  this->writeRegister(NRF24CMD_FLUSH_RX, 0, 0);
-  this->writeRegister(NRF24CMD_FLUSH_TX, 0, 0);
-
-  // Reconfigure CONFIG register
-  uint8_t config =
-      (1 << CONFIG_REG_MASK_RX_DR) |  // Interrupt on RX data received
-      (1 << CONFIG_REG_MASK_TX_DS) |  // No interrupt on TX done
-      (1 << CONFIG_REG_MASK_MAX_RT) | // Interrupt on max retries exceeded
-      (1 << CONFIG_REG_EN_CRC) |      // Enable CRC
-      (1 << CONFIG_REG_CRC0) |        // 2-byte CRC
-      (1 << CONFIG_REG_PWR_UP) |      // Power up
-      (1 << CONFIG_REG_PRIM_RX);      // Start in RX mode
-
-  uint8_t cmd = config;
-  this->writeRegister(CONFIG_REG, &cmd, 1);
-
-  // Allow settling time after CONFIG change
-  _delay_ms(2);
-
-  // Reconfigure Enhanced ShockBurst (AutoACK)
-  if (this->_autoack) {
-    cmd = (0 << EN_AA_REG_ENAA_P5) | (0 << EN_AA_REG_ENAA_P4) |
-          (0 << EN_AA_REG_ENAA_P3) | (0 << EN_AA_REG_ENAA_P2) |
-          (0 << EN_AA_REG_ENAA_P1) | (1 << EN_AA_REG_ENAA_P0);  // AutoACK only on P0
-  } else {
-    cmd = 0x00;  // All AutoACK disabled
-  }
-  this->writeRegister(EN_AA_REG, &cmd, 1);
-
-  // Reconfigure automatic retransmission
-  if (this->_autoack) {
-    cmd = 0xF1; // ARD=1111 (4000µs), ARC=0001 (1 retry)
-  } else {
-    cmd = 0xF0; // ARD=1111 (4000µs), ARC=0000 (no retries)
-  }
-  this->writeRegister(SETUP_RETR_REG, &cmd, 1);
-
-  // Reconfigure feature register (Dynamic Payload Length, etc.)
-  if (this->_autoack) {
-    cmd = (1 << FEATURE_REG_EN_DPL) |   // Dynamic Payload Length
-          (1 << FEATURE_REG_EN_ACK_PAY) | // ACK Payload
-          (1 << FEATURE_REG_EN_DYN_ACK);  // Dynamic ACK
-  } else {
-    cmd = (1 << FEATURE_REG_EN_DPL);    // Only DPL enabled
-  }
-  this->writeRegister(FEATURE_REG, &cmd, 1);
-}
-
-
-//-------------------------------------------------------------------------------------
-// Print register information for debug
-#ifdef HAS_SERIAL
 void NRF24Manager::info() {
 
   uint8_t buffer[5];
@@ -820,8 +795,7 @@ void NRF24Manager::info() {
   this->readRegister(RX_ADDR_P0_REG, buffer, 5);
   USART_WritePString(PSTR("   RX_ADDR_P0: "));
   for (uint8_t i = 0; i < 5; i++) {
-    USART_WriteUInt(buffer[i], 16);
-    USART_WritePString(PSTR(","));
+    USART_WriteChar(buffer[i]);
   }
   USART_WritePString(PSTR("\n"));
 
@@ -833,8 +807,7 @@ void NRF24Manager::info() {
   this->readRegister(RX_ADDR_P1_REG, buffer, 5);
   USART_WritePString(PSTR("   RX_ADDR_P1: "));
   for (uint8_t i = 0; i < 5; i++) {
-    USART_WriteUInt(buffer[i], 16);
-    USART_WritePString(PSTR(","));
+    USART_WriteChar(buffer[i]);
   }
   USART_WritePString(PSTR("\n"));
 
@@ -846,12 +819,22 @@ void NRF24Manager::info() {
   this->readRegister(TX_ADDR_REG, buffer, 5);
   USART_WritePString(PSTR("      TX_ADDR: "));
   for (uint8_t i = 0; i < 5; i++) {
-    USART_WriteUInt(buffer[i], 16);
-    USART_WritePString(PSTR(","));
+    USART_WriteChar(buffer[i]);
   }
   USART_WritePString(PSTR("\n"));
 }
 
+/**
+ * @brief Print module summary/status
+ * 
+ * Outputs a brief status summary including current state, addresses,
+ * and packet statistics.
+ * 
+ * @note Requires serial output support (configured via HAS_SERIAL or HAS_INT0_SERIAL)
+ * @note Lighter output than info()
+ * 
+ * @see info()
+ */
 void NRF24Manager::summary() {
   uint8_t buffer[1];
 
@@ -885,10 +868,110 @@ void NRF24Manager::summary() {
 
 #elif defined(HAS_INT0_SERIAL)
 
+/**
+ * @brief Print module information/statistics
+ * 
+ * Outputs detailed diagnostic information including register contents,
+ * configuration settings, transmission statistics, and FIFO status.
+ * Output format varies depending on HAS_SERIAL compile flag.
+ * 
+ * @note Requires serial output support (configured via HAS_SERIAL or HAS_INT0_SERIAL)
+ * @note Non-blocking function
+ * 
+ * @see summary()
+ */
 void NRF24Manager::info() {
 
   uint8_t buffer[5];
   this->summary();
+
+  this->readRegister(RX_ADDR_P0_REG, buffer, 5);
+  INT0_WritePString(PSTR("   RX_ADDR_P0: "));
+  for (uint8_t i = 0; i < 5; i++) {
+    INT0_WriteChar(buffer[i]);
+  }
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RX_PW_P0_REG, buffer, 1);
+  INT0_WritePString(PSTR("     RX_PW_P0: "));
+  INT0_WriteUInt(buffer[0]);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RX_ADDR_P1_REG, buffer, 5);
+  INT0_WritePString(PSTR("   RX_ADDR_P1: "));
+  for (uint8_t i = 0; i < 5; i++) {
+    INT0_WriteChar(buffer[i]);
+  }
+  INT0_WritePString(PSTR("\n"));
+    this->readRegister(RX_PW_P1_REG, buffer, 1);
+  INT0_WritePString(PSTR("     RX_PW_P1: "));
+  INT0_WriteUInt(buffer[0]);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(TX_ADDR_REG, buffer, 5);
+  INT0_WritePString(PSTR("      TX_ADDR: "));
+  for (uint8_t i = 0; i < 5; i++) {
+    INT0_WriteChar(buffer[i]);
+  }
+  INT0_WritePString(PSTR("\n"));
+  
+  uint8_t l = 0; // Default to 0 if read fails
+  this->send_spi(NRF24CMD_R_RX_PL_WID, &l, 1);
+  INT0_WritePString(PSTR("     R_RX_PL_WID: "));
+  INT0_WriteUInt(l);
+  INT0_WritePString(PSTR("\n"));
+}
+
+/**
+ * @brief Print module summary/status
+ * 
+ * Outputs a brief status summary including current state, addresses,
+ * and packet statistics.
+ * 
+ * @note Requires serial output support (configured via HAS_SERIAL or HAS_INT0_SERIAL)
+ * @note Lighter output than info()
+ * 
+ * @see info()
+ */
+void NRF24Manager::summary() {
+  uint8_t buffer[1];
+
+  INT0_WritePString(PSTR("NRF24 info:\n"));
+
+  this->readRegister(CONFIG_REG, buffer, 1);
+  INT0_WritePString(PSTR("       CONFIG: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(STATUS_REG, buffer, 1);
+  INT0_WritePString(PSTR("       STATUS: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(OBSERVE_TX_REG, buffer, 1);
+  INT0_WritePString(PSTR("   OBSERVE_TX: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(RPD_REG, buffer, 1);
+  INT0_WritePString(PSTR("          RPD: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(FIFO_STATUS_REG, buffer, 1);
+  INT0_WritePString(PSTR("  FIFO_STATUS: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(DYNPD_REG, buffer, 1);
+  INT0_WritePString(PSTR("        DYNPD: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
+
+  this->readRegister(FEATURE_REG, buffer, 1);
+  INT0_WritePString(PSTR("      FEATURE: "));
+  INT0_WriteUInt(buffer[0], 2);
+  INT0_WritePString(PSTR("\n"));
 
   this->readRegister(EN_AA_REG, buffer, 1);
   INT0_WritePString(PSTR("        EN_AA: "));
@@ -920,80 +1003,6 @@ void NRF24Manager::info() {
   INT0_WriteUInt(buffer[0], 2);
   INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(DYNPD_REG, buffer, 1);
-  INT0_WritePString(PSTR("        DYNPD: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(FEATURE_REG, buffer, 1);
-  INT0_WritePString(PSTR("      FEATURE: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(RX_ADDR_P0_REG, buffer, 5);
-  INT0_WritePString(PSTR("   RX_ADDR_P0: "));
-  for (uint8_t i = 0; i < 5; i++) {
-    INT0_WriteUInt(buffer[i], 16);
-    INT0_WritePString(PSTR(","));
-  }
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(RX_PW_P0_REG, buffer, 1);
-  INT0_WritePString(PSTR("     RX_PW_P0: "));
-  INT0_WriteUInt(buffer[0]);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(RX_ADDR_P1_REG, buffer, 5);
-  INT0_WritePString(PSTR("   RX_ADDR_P1: "));
-  for (uint8_t i = 0; i < 5; i++) {
-    INT0_WriteUInt(buffer[i], 16);
-    INT0_WritePString(PSTR(","));
-  }
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(RX_PW_P1_REG, buffer, 1);
-  INT0_WritePString(PSTR("     RX_PW_P1: "));
-  INT0_WriteUInt(buffer[0]);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(TX_ADDR_REG, buffer, 5);
-  INT0_WritePString(PSTR("      TX_ADDR: "));
-  for (uint8_t i = 0; i < 5; i++) {
-    INT0_WriteUInt(buffer[i], 16);
-    INT0_WritePString(PSTR(","));
-  }
-  INT0_WritePString(PSTR("\n"));
-}
-
-void NRF24Manager::summary() {
-  uint8_t buffer[1];
-
-  INT0_WritePString(PSTR("NRF24 info:\n"));
-
-  this->readRegister(CONFIG_REG, buffer, 1);
-  INT0_WritePString(PSTR("       CONFIG: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(STATUS_REG, buffer, 1);
-  INT0_WritePString(PSTR("       STATUS: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(OBSERVE_TX_REG, buffer, 1);
-  INT0_WritePString(PSTR("   OBSERVE_TX: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(RPD_REG, buffer, 1);
-  INT0_WritePString(PSTR("          RPD: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(FIFO_STATUS_REG, buffer, 1);
-  INT0_WritePString(PSTR("  FIFO_STATUS: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
 }
 
 #else
