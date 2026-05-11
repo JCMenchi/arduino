@@ -10,32 +10,82 @@
 
 #include "nunchuk.h"
 
-/*
-  Classic calibration
+/**
+ * @file nunchuk.cpp
+ * @brief Implementation of Wii Nunchuk controller driver.
+ * 
+ * Provides I2C communication with a Wii Nunchuk controller, including:
+ * - Device initialization and verification
+ * - Calibration data retrieval
+ * - Periodic sensor data updates
+ * - Joystick position analysis
+ * - Debug output via serial port
+ */
 
-  Nunchuk calibration:
-    
-        min center max
-    JX   26   128  228
-    JY   31   128  222
-    
-             X   Y   Z
-    Acc 0G 504 513 516
-    Acc 1G 708 710 724
+/**
+ * @defgroup I2CProtocol I2C Protocol Constants
+ * @brief Low-level I2C protocol constants for Nunchuk communication.
+ * @{
+ */
 
-*/
+/** Typical calibration data for reference (not used by driver):
+ *  
+ *  Joystick calibration:
+ *    min center max
+ *  JX   26   128  228
+ *  JY   31   128  222
+ *  
+ *  Accelerometer calibration:
+ *         X   Y   Z
+ *  Acc 0G 504 513 516
+ *  Acc 1G 708 710 724
+ */
 
+/** I2C address of the Nunchuk device */
 #define NUNCHUK_I2C_ID 0x52
+
+/** I2C register address containing device identifier */
 #define WII_DEVICE_REGISTER 0xFA
+
+/** I2C register address for current position/button data */
 #define WII_POSITION_REGISTER 0x00
+
+/** I2C register address for calibration data */
 #define WII_CALIBRATION_REGISTER 0x20
 
+/** Device ID part 1: identifies the Nunchuk controller */
 const uint32_t NUNCHUK_DEVICE_ID_PART1 = 0x0000A420;
-const uint32_t NUNCHUK_DEVICE_ID_PART2 = 0x00000000; 
 
+/** Device ID part 2: second part of the device identifier */
+const uint32_t NUNCHUK_DEVICE_ID_PART2 = 0x00000000;
+
+/** Use unencrypted data mode (encrypted mode would require decoding) */
 #define NOT_ENCRYPTED
 
+/// @}
 
+/**
+ * @brief Initializes the Nunchuk controller.
+ * 
+ * Performs the following steps:
+ * 1. Initializes the I2C interface
+ * 2. Sends initialization sequence to put the Nunchuk in unencrypted mode
+ * 3. Reads and verifies the device ID (must match NUNCHUK_DEVICE_ID_PART1/2)
+ * 4. Retrieves calibration data from device memory
+ * 5. Performs an initial data update
+ * 
+ * The unencrypted mode initialization sequence is:
+ * - Write 0xF0 and 0x55 to register (init unencrypted mode)
+ * - Write 0xFB and 0x00 to register (zero address)
+ * 
+ * If HAS_SERIAL is defined, debug messages are sent to serial output.
+ * 
+ * @return true if the device was successfully found and initialized, 
+ *         false if I2C communication failed or device ID mismatch
+ * 
+ * @see get_calibration()
+ * @see update()
+ */
 bool Nunchuk::initialize() {
 
   // Init I2C com
@@ -117,6 +167,31 @@ bool Nunchuk::initialize() {
   return true;
 }
 
+/**
+ * @brief Updates sensor data from the Nunchuk.
+ * 
+ * Performs the following operations:
+ * 1. Sends read request to position register (0x00)
+ * 2. Reads 6 bytes of data: joystick_x, joystick_y, accel_x_high, accel_y_high,
+ *    accel_z_high, and button_flags/accel_low
+ * 3. Analyzes current joystick position using get_joystick_position()
+ * 4. Checks if position or button state changed since last update
+ * 5. If HAS_SERIAL is defined and buttons are pressed, outputs button state
+ * 
+ * The 6-byte data structure:
+ * - Byte 0: Joystick X (8 bits)
+ * - Byte 1: Joystick Y (8 bits)
+ * - Byte 2: Accelerometer X (high 8 bits)
+ * - Byte 3: Accelerometer Y (high 8 bits)
+ * - Byte 4: Accelerometer Z (high 8 bits)
+ * - Byte 5: (2 bits accel X low) (2 bits accel Y low) (2 bits accel Z low) 
+ *           (1 bit Z button) (1 bit C button)
+ * 
+ * @return true if joystick position or button state changed since last update,
+ *         false if no change detected
+ * 
+ * @see get_joystick_position()
+ */
 bool Nunchuk::update() {
   TinyI2C.start(NUNCHUK_I2C_ID, 0);
   TinyI2C.write(WII_POSITION_REGISTER);
@@ -156,6 +231,40 @@ bool Nunchuk::update() {
   return false;
 }
 
+/**
+ * @brief Retrieves and processes calibration data from the Nunchuk.
+ * 
+ * Reads 16 bytes of calibration data from the Nunchuk device and extracts:
+ * 
+ * **Accelerometer 0g calibration (bytes 0-3):**
+ * - X, Y, Z 8-bit values (bytes 0-2)
+ * - Low 2 bits combined from byte 3
+ * - Result: 10-bit values for zero-gravity reference
+ * 
+ * **Accelerometer 1g calibration (bytes 4-7):**
+ * - X, Y, Z 8-bit values (bytes 4-6)
+ * - Low 2 bits combined from byte 7
+ * - Result: 10-bit values for one-gravity reference
+ * 
+ * **Joystick calibration (bytes 8-13):**
+ * - X axis: max, min, center (bytes 8-10)
+ * - Y axis: max, min, center (bytes 11-13)
+ * 
+ * **Checksum (bytes 14-15):** Read but not used
+ * 
+ * After reading, the method calculates resolution factors for accelerometer
+ * calibration conversion from raw values to gravitational units (g):
+ * - _ax_res = 1.0 / (_ax_1g - _ax_0g)
+ * - _ay_res = 1.0 / (_ay_1g - _ay_0g)
+ * - _az_res = 1.0 / (_az_1g - _az_0g)
+ * 
+ * @return true (always succeeds if I2C communication works)
+ * 
+ * @note Called automatically during initialize(). Should not be called directly
+ *       unless recalibration is needed.
+ * 
+ * @see initialize()
+ */
 bool Nunchuk::get_calibration() {
   TinyI2C.start(NUNCHUK_I2C_ID, 0);
   TinyI2C.write(WII_CALIBRATION_REGISTER);
@@ -211,6 +320,29 @@ bool Nunchuk::get_calibration() {
   return true;
 }
 
+/**
+ * @brief Calculates the joystick displacement magnitude.
+ * 
+ * Computes the Euclidean distance from the joystick center position to the
+ * current position, then scales it to a 0-255 value.
+ * 
+ * Algorithm:
+ * 1. Calculate offsets from center: dx = x - center_x, dy = y - center_y
+ * 2. Compute magnitude: distance = sqrt(dx² + dy²)
+ * 3. Normalize by dividing by 10000.0 (empirically derived scaling factor)
+ * 4. Scale to 0-255 range
+ * 
+ * The maximum expected radius is approximately 100 pixels from center,
+ * so the scaling factor of 10000.0 provides a good range mapping.
+ * 
+ * @return Joystick strength as a value from 0 (at center) to 255
+ *         (at maximum displacement, approximately at the edge)
+ * 
+ * @see joystick_x()
+ * @see joystick_y()
+ * @see joystick_x_center()
+ * @see joystick_y_center()
+ */
 uint8_t Nunchuk::joystick_strength() {
   int16_t dx = joystick_x() - _jx_center;
   int16_t dy = joystick_y() - _jy_center;
@@ -218,6 +350,34 @@ uint8_t Nunchuk::joystick_strength() {
   return (uint8_t)(sqrt((dx*dx+dy*dy)/10000.0f) * 255); // max radius is around 100
 }
 
+/**
+ * @brief Displays calibration data to the serial port.
+ * 
+ * Outputs the following information (only if HAS_SERIAL is defined):
+ * 
+ * **Joystick calibration:**
+ * - JX: minimum, center, maximum raw values
+ * - JY: minimum, center, maximum raw values
+ * 
+ * **Accelerometer 0g calibration:**
+ * - X, Y, Z raw values at zero gravity
+ * 
+ * **Accelerometer 1g calibration:**
+ * - X, Y, Z raw values at one gravity
+ * 
+ * **Accelerometer range and resolution (for each axis):**
+ * - AccX: minimum and maximum values in g units, resolution in g/unit
+ * - AccY: minimum and maximum values in g units, resolution in g/unit
+ * - AccZ: minimum and maximum values in g units, resolution in g/unit
+ * 
+ * The min/max values assume the accelerometer can measure from -1g to +1023 units,
+ * providing the full range of detectable acceleration.
+ * 
+ * @note Only produces output if HAS_SERIAL is defined during compilation.
+ *       Output is formatted for easy reading and debugging of calibration data.
+ * 
+ * @see display()
+ */
 void Nunchuk::display_calibration() {
   #ifdef HAS_SERIAL
   USART_WriteString("Nunchuk calibration:\n");
@@ -288,6 +448,36 @@ void Nunchuk::display_calibration() {
   #endif
 }
 
+/**
+ * @brief Displays current sensor readings to the serial port.
+ * 
+ * Outputs the following information (only if HAS_SERIAL is defined):
+ * 
+ * **Joystick position:**
+ * - Current X and Y coordinates (raw 0-255 values)
+ * 
+ * **Accelerometer readings:**
+ * - Raw 10-bit acceleration values for X, Y, Z axes
+ * - Use x_g(), y_g(), z_g() methods to get calibrated g-force values
+ * 
+ * **Button states:**
+ * - Z button: displayed as 'Z' if pressed, 'z' if not pressed
+ * - C button: displayed as 'C' if pressed, 'c' if not pressed
+ * 
+ * Typical output:
+ * ```
+ * Nunchuk info:
+ * joystick: 128, 130
+ * accel: 512, 510, 516
+ * Button: z c
+ * ```
+ * 
+ * @note Only produces output if HAS_SERIAL is defined during compilation.
+ *       Intended for real-time monitoring of sensor data during development.
+ * 
+ * @see display_calibration()
+ * @see x_g(), y_g(), z_g() for calibrated acceleration values
+ */
 void Nunchuk::display() {
 #ifdef HAS_SERIAL
   USART_WriteString("Nunchuk info:\n");
@@ -315,6 +505,43 @@ void Nunchuk::display() {
 #endif
 }
 
+/**
+ * @brief Determines the joystick's directional position.
+ * 
+ * Analyzes the current joystick X and Y coordinates relative to the center
+ * position, dividing the joystick range into 9 regions (8 directions + center).
+ * 
+ * **Algorithm:**
+ * 1. Calculate dead zone size: 1/6 of the joystick range for each axis
+ * 2. Check if X and Y are within center region (±dead zone)
+ * 3. If X is within center and Y is within center → CENTER
+ * 4. If X is within center and Y is above → NORTH
+ * 5. If X is within center and Y is below → SOUTH
+ * 6. If X is to the right and Y is within center → EAST
+ * 7. If X is to the right and Y is above → NORTH_EAST
+ * 8. If X is to the right and Y is below → SOUTH_EAST
+ * 9. If X is to the left and Y is within center → WEST
+ * 10. If X is to the left and Y is above → NORTH_WEST
+ * 11. If X is to the left and Y is below → SOUTH_WEST
+ * 12. Otherwise → UNKNOWN
+ * 
+ * **Dead Zone:** The center region extends ±1/6 of the total range on each axis.
+ * For example, if the range is 0-255, the dead zone is approximately ±42 pixels.
+ * 
+ * **Return Values:**
+ * - '^' (NORTH), 'v' (SOUTH), '<' (WEST), '>' (EAST) for cardinal directions
+ * - '\\', '/', ',' , '`' for diagonal directions (NW, NE, SW, SE)
+ * - 'x' (CENTER) for centered joystick
+ * - '?' (UNKNOWN) if position doesn't match any region
+ * 
+ * @return Character constant representing the joystick position
+ *         (one of the NUNCHUK_JOYSTICK_* constants)
+ * 
+ * @see joystick_x()
+ * @see joystick_y()
+ * @see joystick_x_center()
+ * @see joystick_y_center()
+ */
 char Nunchuk::get_joystick_position() {
 
   uint8_t resx = (_jx_max -_jx_min) / 6;
