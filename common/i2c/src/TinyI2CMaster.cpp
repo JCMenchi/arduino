@@ -64,13 +64,13 @@ TinyI2CMaster::TinyI2CMaster() : I2Ccount(0), initialised(false) {}
 #define I2C_SDA_PIN PB1
 #endif
 
-#define SDA_HIGH GPIO_INPUT(I2C_PORT, I2C_SDA_PIN)
-#define SCL_HIGH GPIO_INPUT(I2C_PORT, I2C_SCL_PIN)
+#define SDA_HIGH GPIO_INPUT_PULLUP(I2C_PORT, I2C_SDA_PIN)
+#define SCL_HIGH GPIO_INPUT_PULLUP(I2C_PORT, I2C_SCL_PIN)
 
 #define SDA_LOW GPIO_OUTPUT(I2C_PORT, I2C_SDA_PIN);GPIO_SET_LOW(I2C_PORT, I2C_SDA_PIN)
 #define SCL_LOW GPIO_OUTPUT(I2C_PORT, I2C_SCL_PIN);GPIO_SET_LOW(I2C_PORT, I2C_SCL_PIN)
 
-const double I2C_BUS_DELAY_US = 10; // Delay in microseconds for timing control
+const double I2C_BUS_DELAY_US = 0.1; // Delay in microseconds for timing control
 
 uint8_t TinyI2CMaster::transfer(uint8_t data) {
   
@@ -90,8 +90,8 @@ void TinyI2CMaster::init(bool fast) {
   if (initialised) return;
 
   // Configure SCL and SDA pins as open-drain outputs (initially high)
-  GPIO_INPUT(I2C_PORT, I2C_SDA_PIN);
-  GPIO_INPUT(I2C_PORT, I2C_SCL_PIN);
+  GPIO_INPUT_PULLUP(I2C_PORT, I2C_SDA_PIN);
+  GPIO_INPUT_PULLUP(I2C_PORT, I2C_SCL_PIN);
 
   initialised = true; // Set initialised flag
 }
@@ -105,13 +105,15 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
 
   // send start sequence: SDA goes low while SCL is high, then SCL goes low
   SDA_LOW;
-  _delay_us(I2C_BUS_DELAY_US); // Short delay for START condition
+  //_delay_us(I2C_BUS_DELAY_US); // Short delay for START condition
   SCL_LOW;
   _delay_us(I2C_BUS_DELAY_US);
 
   if (!write(addressRW)) {
     stop(); // If address not acknowledged, send STOP condition
+    #ifdef HAS_INT0_SERIAL
     INT0_WritePString(PSTR("I2C start failed\n"));
+    #endif
     return false; // Start failed due to no ACK
   }
 
@@ -126,13 +128,13 @@ void TinyI2CMaster::stop(void) {
 
   // last start/read/write has left SCL LOW
   SDA_LOW;
-  _delay_us(I2C_BUS_DELAY_US); // Short delay for STOP condition
+  //_delay_us(I2C_BUS_DELAY_US); // Short delay for STOP condition
   
   // send stop sequence
   SCL_HIGH;
   _delay_us(I2C_BUS_DELAY_US); // Short delay before releasing SDA
   SDA_HIGH;
-  _delay_us(I2C_BUS_DELAY_US); // Short delay after STOP condition
+  //_delay_us(I2C_BUS_DELAY_US); // Short delay after STOP condition
 }
 
 bool TinyI2CMaster::write(uint8_t data) {
@@ -144,27 +146,29 @@ bool TinyI2CMaster::write(uint8_t data) {
     } else {
       SDA_LOW;
     }
-    _delay_us(I2C_BUS_DELAY_US); 
+    //_delay_us(I2C_BUS_DELAY_US); 
     // Generate clock pulse on SCL (start has left SCL low, so we can just toggle it)
     SCL_HIGH;
     _delay_us(I2C_BUS_DELAY_US); // Short delay for clock high, allowing slave to read bit
     
     SCL_LOW;
-    _delay_us(I2C_BUS_DELAY_US); // Short delay for clock low
+    //_delay_us(I2C_BUS_DELAY_US); // Short delay for clock low
   }
 
   // read acknowledgment bit from slave
   SDA_HIGH;
-  _delay_us(I2C_BUS_DELAY_US);
+  //_delay_us(I2C_BUS_DELAY_US);
   SCL_HIGH; // Clock high to allow slave to send ACK
   _delay_us(I2C_BUS_DELAY_US); // Short delay for ACK bit to be valid
   bool ack = (GPIO_READ(I2C_PORT, I2C_SDA_PIN) == GPIO_LOW); // ACK is active low
   SCL_LOW; // Clock low
-  _delay_us(I2C_BUS_DELAY_US);
+  //_delay_us(I2C_BUS_DELAY_US);
   SDA_LOW;
 
   if (!ack) {
+    #ifdef HAS_INT0_SERIAL
     INT0_WritePString(PSTR("I2C write NACK\n"));
+    #endif
     return false; // No ACK received, write failed
   }
 
@@ -180,7 +184,7 @@ uint8_t TinyI2CMaster::read(void) {
   uint8_t data = 0;
 
   for(int8_t i = 7; i >= 0; i--) {
-    _delay_us(I2C_BUS_DELAY_US); // Short delay for clock high
+    //_delay_us(I2C_BUS_DELAY_US); // Short delay for clock high
      // Generate clock pulse on SCL (start has left SCL low, so we can just toggle it)
     SCL_HIGH;
     _delay_us(I2C_BUS_DELAY_US); // Short delay for clock high
@@ -206,14 +210,14 @@ uint8_t TinyI2CMaster::read(void) {
   SCL_HIGH; // pulse clock
   _delay_us(I2C_BUS_DELAY_US); 
   SCL_LOW;
-  _delay_us(I2C_BUS_DELAY_US);
+  //_delay_us(I2C_BUS_DELAY_US);
 
   // keep SDA HIGH
   SDA_LOW; 
 
-  INT0_WritePString(PSTR("I2C read: "));
-  INT0_WriteUInt(data, 16);
-  INT0_WritePString(PSTR("\n"));
+  //INT0_WritePString(PSTR("I2C read: "));
+  //INT0_WriteUInt(data, 16);
+  //INT0_WritePString(PSTR("\n"));
 
   return data; 
 }

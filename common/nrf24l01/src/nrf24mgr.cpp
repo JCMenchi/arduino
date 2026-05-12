@@ -671,7 +671,7 @@ void NRF24Manager::set_ack_buffer(uint8_t *msg, uint8_t length) {
  * 
  * @see set_ack_buffer(), changeState()
  */
-uint8_t* NRF24Manager::send_binary(uint8_t *msg, uint8_t &length) {
+uint8_t NRF24Manager::send_binary(uint8_t *msg, uint8_t length) {
   // Transmit mode: CE low, enter TX mode
   this->celow();  // Stop any RX activity
   this->changeState(NRF24_TRANSMIT);
@@ -726,11 +726,10 @@ uint8_t* NRF24Manager::send_binary(uint8_t *msg, uint8_t &length) {
   // Check for transmission success or failure
   if (status & (1 << STATUS_REG_MAX_RT)) {
     // Transmission failed
-    length = 33; // Indicate failure with special length value (greater than max payload)
-    return NULL;
+    return 33;
   }
 
-  return result;
+  return length;
 }
 
 #ifdef HAS_SERIAL

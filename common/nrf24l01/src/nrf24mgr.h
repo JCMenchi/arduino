@@ -247,7 +247,7 @@ public:
    * 
    * @see set_ack_buffer(), changeState()
    */
-  uint8_t* send_binary(uint8_t *msg, uint8_t &length);
+  uint8_t send_binary(uint8_t *msg, uint8_t length);
 
   /**
    * @brief Configure custom payload to send with ACK packets
