@@ -18,13 +18,17 @@ An ATtiny84-based project that communicates wirelessly via an NRF24L01+ radio mo
 | ATtiny84 Pin | Port | Function         | Connected To         |
 |--------------|------|------------------|----------------------|
 | Pin 1        | VCC  | Power            | 3.3V / 5V supply     |
+| Pin 2        | PB0  | I2C SCL (soft)   | nunchuk SCL          |
+| Pin 3        | PB1  | I2C SDA (soft)   | nunchuk SDA          |
+| Pin 4        | PB3  | RESET            | Serial Adapter TX    |
 | Pin 5        | PB2  | INT0 / Serial RX | Serial Adapter TX    |
 | Pin 6        | PA7  | Serial TX        | Serial Adapter RX    |
-| Pin 7        | PA6  | USI DI (MISO)    | NRF24L01+ MISO (7)  |
-| Pin 8        | PA5  | USI DO (MOSI)    | NRF24L01+ MOSI (6)  |
-| Pin 9        | PA4  | USI SCK          | NRF24L01+ SCK (5)   |
-| Pin 11       | PA2  | CSN              | NRF24L01+ CSN (4)   |
-| Pin 12       | PA1  | CE               | NRF24L01+ CE (3)    |
+| Pin 7        | PA6  | USI DI (MISO)    | NRF24L01+ MISO (7)   |
+| Pin 8        | PA5  | USI DO (MOSI)    | NRF24L01+ MOSI (6)   |
+| Pin 9        | PA4  | USI SCK          | NRF24L01+ SCK (5)    |
+| Pin 10       | PA3  |                  |                      |
+| Pin 11       | PA2  | CSN              | NRF24L01+ CSN (4)    |
+| Pin 12       | PA1  | CE               | NRF24L01+ CE (3)     |
 | Pin 13       | PA0  | LED              | LED (via 330Ω to GND)|
 | Pin 14       | GND  | Ground           | GND                  |
 
@@ -49,7 +53,7 @@ pio run -t upload
 | `avrtools` | GPIO macros, INT0 software serial    |
 | `tinyspi`  | USI-based SPI master/slave driver    |
 | `nrf24l01` | NRF24L01+ radio manager              |
-| `i2c`      | USI-based I2C master (for Nunchuk)   |
+| `i2c`      | I2C master (for Nunchuk)             |
 | `nunchuk`  | Wii Nunchuk driver over I2C          |
 
 ## Usage
