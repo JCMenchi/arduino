@@ -198,30 +198,88 @@
 
 /** @brief Musical note C8 (4186 Hz) */
 #define NOTE_C8  4186
+/** @brief Musical note C#8 (4435 Hz) */
 #define NOTE_CS8 4435
+/** @brief Musical note D8 (4699 Hz) */
 #define NOTE_D8  4699
+/** @brief Musical note D#8 (4978 Hz) */
 #define NOTE_DS8 4978
 
+/** @brief Number of notes in the sound loop sequence */
 const uint8_t SOUND_LOOP_SIZE = 4;
+/** @brief Predefined sound loop note sequence: B2, A#2, F#2, F2 */
 const uint8_t sound_loop[] = { NOTE_AS2, NOTE_GS2, NOTE_FS2, NOTE_F2 };
+/** @brief Duration (ms) each note is played in the sound loop */
 const uint16_t SOUND_LOOP_NOTE_DURATION = 800;
+/** @brief Pause (ms) between notes in the sound loop */
 const uint16_t SOUND_LOOP_NOTE_PAUSE = 200;
 
+/**
+ * @brief PORT register for tone output (configurable, defaults to PORTB)
+ * 
+ * Define MUSIC_PORT before including this header to override the default.
+ * Example: @c #define MUSIC_PORT PORTC
+ */
 #ifndef MUSIC_PORT
 #define MUSIC_PORT PORTB
 #endif
 
+/**
+ * @brief DDR register for tone output (configurable, defaults to DDRB)
+ * 
+ * Define MUSIC_DDR before including this header to override the default.
+ * Example: @c #define MUSIC_DDR DDRC
+ */
 #ifndef MUSIC_DDR
 #define MUSIC_DDR DDRB
 #endif
 
+/**
+ * @brief Pin number for tone output (configurable, defaults to PORTB0)
+ * 
+ * Define MUSIC_PIN before including this header to override the default.
+ * Example: @c #define MUSIC_PIN PORTC4
+ */
 #ifndef MUSIC_PIN
 #define MUSIC_PIN PORTB0
 #endif
 
+/**
+ * @brief Play a startup sound sequence
+ * 
+ * Plays two sequential tones:
+ * - 100 ms tone at B5 (494 Hz)
+ * - 850 ms tone at E6 (1319 Hz)
+ * 
+ * Output is directed to the pin configured by MUSIC_PIN.
+ */
 void start_sound();
 
+/**
+ * @brief Play a tone at specified frequency for a duration
+ * 
+ * Generates a square wave using Timer2 at the specified frequency.
+ * Automatically selects appropriate prescaler values.
+ * 
+ * @param mcu_port Pointer to PORT register for output (e.g., &PORTB)
+ * @param mcu_ddr Pointer to DDR register for output (e.g., &DDRB)
+ * @param pin_on_port Bit number of pin within port (0-7)
+ * @param frequency Desired tone frequency in Hz (see NOTE_* constants)
+ * @param duration Tone duration in milliseconds; 0 = play indefinitely
+ * 
+ * @note On tinyAVR devices (ATtiny45, ATtiny84), this is a no-op
+ * @note Timer2 must be available on the microcontroller
+ */
 void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin_on_port, unsigned int frequency, unsigned long duration);
+
+/**
+ * @brief Stop all tone generation
+ * 
+ * Disables Timer2 interrupt, sets output pin LOW, and stops the tone.
+ * Safe to call when no tone is active.
+ * 
+ * @note On tinyAVR devices (ATtiny45, ATtiny84), this is a no-op
+ */
 void stopNote();
 
 inline void start_sound() {

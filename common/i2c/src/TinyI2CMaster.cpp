@@ -64,6 +64,11 @@ TinyI2CMaster::TinyI2CMaster() : I2Ccount(0), initialised(false) {}
 #define I2C_SDA_PIN PB1
 #endif
 
+/** T2 timing: Delay between SCL high to SDA setup, >1.3us for fast mode */
+#define DELAY_T2TWI (_delay_us(2)) // >1.3us  
+/** T4 timing: Delay for SCL-to-SDA hold time, >0.6us for fast mode */
+#define DELAY_T4TWI (_delay_us(1)) // >0.6us
+
 #define SDA_HIGH GPIO_INPUT_PULLUP(I2C_PORT, I2C_SDA_PIN)
 #define SCL_HIGH GPIO_INPUT_PULLUP(I2C_PORT, I2C_SCL_PIN)
 
@@ -105,7 +110,7 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
 
   // send start sequence: SDA goes low while SCL is high, then SCL goes low
   SDA_LOW;
-  //_delay_us(I2C_BUS_DELAY_US); // Short delay for START condition
+  DELAY_T4TWI; // Short delay for START condition
   SCL_LOW;
   _delay_us(I2C_BUS_DELAY_US);
 

@@ -1,98 +1,196 @@
-# Projects based on ATtiny84
+# ATtiny84 Microcontroller Projects
 
-Features (from datasheet)
+The ATtiny84 is a versatile 14-pin AVR microcontroller with 8KB Flash and 512B SRAM.
+Its USI (Universal Serial Interface) enables I2C and SPI communication while maintaining a minimal footprint, making it ideal for resource-constrained applications.
 
-High Performance, Low Power AVR® 8-Bit Microcontroller
+## 📊 Specifications
 
-- Advanced RISC Architecture
-  - 120 Powerful Instructions – Most Single Clock Cycle Execution
-  - 32 x 8 General Purpose Working Registers
-  - Fully Static Operation
-- Non-Volatile Program and Data Memories
-  - 2/4/8K Bytes of In-System Programmable Program Memory Flash
-- Endurance: 10,000 Write/Erase Cycles
-  - 128/256/512 Bytes of In-System Programmable EEPROM
-- Endurance: 100,000 Write/Erase Cycles
-  - 128/256/512 Bytes of Internal SRAM
-  - Data Retention: 20 years at 85°C / 100 years at 25°C
-  - Programming Lock for Self-Programming Flash & EEPROM Data Security
-- Peripheral Features
-  - One 8-Bit and One 16-Bit Timer/Counter with Two PWM Channels, Each
-  - 10-bit ADC
-- 8 Single-Ended Channels
-- 12 Differential ADC Channel Pairs with Programmable Gain (1x / 20x)
-  - Programmable Watchdog Timer with Separate On-chip Oscillator
-  - On-chip Analog Comparator
-  - Universal Serial Interface
-- Special Microcontroller Features
-  - debugWIRE On-chip Debug System
-  - In-System Programmable via SPI Port
-  - Internal and External Interrupt Sources: Pin Change Interrupt on 12 Pins
-  - Low Power Idle, ADC Noise Reduction, Standby and Power-Down Modes
-  - Enhanced Power-on Reset Circuit
-  - Programmable Brown-out Detection Circuit
-  - Internal Calibrated Oscillator
-  - On-chip Temperature Sensor
-- I/O and Packages
-  - Available in 20-Pin QFN/MLF & 14-Pin SOIC and PDIP
-  - Twelve Programmable I/O Lines
+| Feature             | Value                            |
+|---------------------|----------------------------------|
+| **Flash Memory**    | 8 KB                             |
+| **SRAM**            | 512 B                            |
+| **EEPROM**          | 512 B                            |
+| **Pins (PDIP)**     | 14                               |
+| **Max Clock**       | 20 MHz                           |
+| **Timers**          | 2 (8-bit & 16-bit)               |
+| **PWM Channels**    | 4                                |
+| **ADC Channels**    | 8 (10-bit)                       |
+| **Special Feature** | USI (Universal Serial Interface) |
+| **Interrupts**      | Pin change on 12 pins            |
 
-![ATtiny84 pin layout](./attiny84.png "ATtiny84 pin layout PDIP14").
+![ATtiny84 pin layout](./ATtiny84-pinout.png "ATtiny84 pin layout PDIP14")
 
-## Set up development environment
+**📄 [Full Datasheet](./ATtiny84-datasheet.pdf)**
 
-On ubuntu install AVR toolchain
+---
+
+## 🚀 Quick Start
+
+### Installation (Ubuntu/Debian)
 
 ```bash
-apt install avrdude gcc-avr gcc-doc avr-libc
+sudo apt install avrdude gcc-avr gcc-doc avr-libc
 ```
 
-Make sure to be in dialout group to be able to use different USB serial interface.
+### Permissions Setup
+
+Add yourself to the `dialout` group for USB serial access:
 
 ```bash
-sudo usermod -aG dialout <username>
+sudo usermod -aG dialout $USER
+# Log out and log back in for changes to take effect
 ```
 
-To develop with [vscode](https://code.visualstudio.com/) add [PlatformIO](https://platformio.org
-) vsix [extension](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide).
+### IDE Setup
 
-## MCU configuration
+Install [Visual Studio Code](https://code.visualstudio.com/) with [PlatformIO IDE](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide) extension.
 
-### FUSE settings
+---
 
-To calculate fuse mask go to [Engbedded Fuse Calculator](https://www.engbedded.com/fusecalc/)
+## 📂 Projects in This Folder
 
-To read current fuse settings
+| Project                     | Description             | Features                  |
+|-----------------------------|-------------------------|---------------------------|
+| [**BlinkTiny**](BlinkTiny/) | Basic LED blink         | GPIO, timers              |
+| [**I2C**](I2C/)             | Two-wire interface demo | I2C communication via USI |
+| [**NRF24**](NRF24/)         | Wireless communication  | 2.4GHz module via SPI     |
+
+---
+
+## 🔧 Configuration & Programming
+
+### Fuse Settings
+
+Use [Engbedded Fuse Calculator](https://www.engbedded.com/fusecalc/) to calculate fuse values.
+
+**Read current fuse settings:**
 
 ```bash
 avrdude -c usbtiny -p t84 -U lfuse:r:-:h -U hfuse:r:-:h -U efuse:r:-:h
 ```
 
-To write fuse
-Following command sets the clock to 8MHz internal (slow startup 64ms) without divider.
-Default factory settings divide by 8, so the clock is 1MHz.
-Classical arduino lib assume attiny84 F_CPU is 8MHz.
+**Set to 8MHz internal clock (64ms startup, no divider):**
 
 ```bash
 avrdude -c usbtiny -p t84 -U lfuse:w:0xE2:m -U hfuse:w:0xDF:m -U efuse:w:0xff:m
 ```
 
-### Read/Write memory
+**Note:** Factory default divides clock by 8 (1MHz). Most Arduino libraries assume 8MHz.
 
-Read EEPROM and dump on stdout (-) in intel hex format
+### Memory Operations
 
-```bash
-avrdude -c usbtiny -p t84 -U eeprom:r:-:i 
-```
-
-Write firmware.hex to flash with [AVR pocket programmer](https://www.sparkfun.com/products/9825)
+**Read EEPROM:**
 
 ```bash
-avrdude -c usbtiny -p t84 -U flash:w:firmware.hex:i 
+avrdude -c usbtiny -p t84 -U eeprom:r:eeprom.hex:i
 ```
 
-Raed flash memory
+**Write firmware to flash:**
 
 ```bash
-avrdude -c usbtiny -p t84 -U flash:r:-:i 
+avrdude -c usbtiny -p t84 -U flash:w:firmware.hex:i
 ```
+
+**Read flash memory:**
+
+```bash
+avrdude -c usbtiny -p t84 -U flash:r:flash.hex:i
+```
+
+**Chip erase before flashing:**
+
+```bash
+avrdude -c usbtiny -p t84 -e -U flash:w:firmware.hex:i
+```
+
+---
+
+## 📦 Building & Uploading
+
+### With PlatformIO
+
+```bash
+cd <project-name>      # e.g., cd I2C
+pio run                # Build
+pio run -t upload      # Upload to board
+pio device monitor     # View serial output
+```
+
+---
+
+## 🔌 Pin Layout & Special Features
+
+Key pin functions:
+
+- **PORTA** (7 pins): ADC0-ADC7, GPIO
+- **PORTB** (3 pins): RESET, XTAL1, XTAL2
+- **SPI Pins:** PB0 (MOSI), PB1 (MISO/SCK - shared via USI)
+- **I2C Pins:** PA6 (SCL), PA7 (SDA) - USI bit-bang mode
+- **Analog Comparator:** PA0/PA1
+
+### Universal Serial Interface (USI)
+
+The USI enables:
+
+- **I2C Master Mode** - Two-wire communication
+- **SPI Master/Slave** - Synchronous serial (TinySPI library)
+- **UART Emulation** - Software serial communication
+
+See [../common/tinyspi/](../common/tinyspi/) and [../common/i2c/](../common/i2c/) for library usage.
+
+---
+
+## 💾 Memory Constraints
+
+- **Total Flash:** 8 KB for code
+- **SRAM:** 512 B - Very tight! Plan carefully
+- **EEPROM:** 512 B - Persistent storage
+- **Stack:** Lives in SRAM - risk of corruption with large variables
+- **Flash cycles:** 10,000 write/erase guaranteed
+- **EEPROM cycles:** 100,000 write/erase guaranteed
+
+**Tips:**
+
+- Use `const` and `PROGMEM` for constant data
+- Minimize local variables in deeply nested functions
+- Consider external EEPROM for data logging
+- Avoid recursive functions
+
+---
+
+## 🛠️ Development Tips
+
+- **Clock:** Default 1MHz (divide by 8). Most projects need 8MHz (change fuse)
+- **Power consumption:** Can operate down to 1.8V for low-power applications
+- **Low-power modes:** Idle, ADC Noise Reduction, Standby, Power-down
+- **Temperature sensor:** On-chip ADC channel for temperature measurement
+- **Debugging:** debugWIRE on-chip debug system available
+
+---
+
+## 📚 Common Libraries
+
+See [../common/README.md](../common/readme.md) for library documentation:
+
+- **TinySPI** - SPI via USI for ATtiny (displays, wireless)
+- **I2C** - Two-wire interface via USI (sensors, displays)
+- **NRF24L01** - 2.4GHz wireless modules
+- **AVRTools** - Low-level utilities and macros
+
+---
+
+## ⚠️ Common Issues
+
+**Clock too slow?** Factory default is 1MHz (divider by 8). Set fuse to E2 for 8MHz.
+
+**Memory full?** 8KB goes quickly. Use compiler optimizations: `-Os -mcall-prologues`
+
+**USI conflicts?** Can't use both I2C and SPI simultaneously - plan your pin usage.
+
+---
+
+## 🔗 Resources
+
+- [PlatformIO Documentation](https://docs.platformio.org/)
+- [AVRDude Manual](https://www.nongnu.org/avrdude/)
+- [Engbedded Fuse Calculator](https://www.engbedded.com/fusecalc/)

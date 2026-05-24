@@ -150,8 +150,23 @@ void INT0_SetBaudRate() {
     _rx_delay_stopbit = subtract_cap(bit_delay * 3 / 4, (37 + 11) / 4);
 }
 
+/** @brief Callback function pointer for received bytes */
 volatile void (*INT0_REC_CB)(uint8_t) = NULL;
 
+/**
+ * @brief Initialize INT0 serial communication
+ * 
+ * Sets up the INT0 external interrupt for bit-bang serial reception and
+ * configures the transmit pin for software serial transmission. Calculates
+ * timing delays based on F_CPU and enables the INT0 interrupt on falling edge.
+ * 
+ * @param tpin GPIO pin number to use for transmission (e.g., PA0)
+ * @param INT0_rec_cb Callback function invoked for each received byte
+ * 
+ * @note Must be called before transmitting or receiving data
+ * @note Callback function is called from ISR context
+ * @see INT0_Transmit() for transmission
+ */
 void INT0_Init(uint8_t tpin, volatile void (*INT0_rec_cb)(uint8_t)) {
     INT0_REC_CB = INT0_rec_cb;
 
@@ -333,15 +348,49 @@ uint8_t INT0_Transmit(uint8_t data) {
 // --------------------------------------------------------------------------------------------
 //  code independant of hardware
 // --------------------------------------------------------------------------------------------
+
+/**
+ * @brief Transmit a single character
+ * 
+ * Transmits a single character (byte) via INT0 serial.
+ * 
+ * @param d Character to transmit
+ * 
+ * @see INT0_WriteString() for transmitting null-terminated strings
+ */
 void INT0_WriteChar(char d) {
     INT0_Transmit(d);
 }
 
+/**
+ * @brief Transmit a null-terminated string
+ * 
+ * Sends each character of the string via INT0 serial. The string must be
+ * stored in RAM (use INT0_WritePString for PROGMEM strings).
+ * 
+ * @param str Pointer to null-terminated string in RAM
+ * 
+ * @see INT0_WritePString() for PROGMEM strings
+ */
 void INT0_WriteString(const char *str) {
     while (*str)
         INT0_Transmit(*str++);
 }
 
+/**
+ * @brief Transmit a null-terminated string from program memory (PROGMEM)
+ * 
+ * Sends each character of a PROGMEM-stored string via INT0 serial.
+ * Use this for constant strings defined with PROGMEM to save RAM.
+ * 
+ * Example:
+ *   const char myString[] PROGMEM = "Hello";
+ *   INT0_WritePString(myString);
+ * 
+ * @param str Pointer to null-terminated string in program memory (PROGMEM)
+ * 
+ * @see INT0_WriteString() for RAM strings
+ */
 void INT0_WritePString(const char *str) {
     uint8_t c;
     for (uint8_t i = 0; i < strlen_P(str); i++) {
@@ -350,8 +399,24 @@ void INT0_WritePString(const char *str) {
     }
 }
 
+/** @brief Buffer for number-to-string conversion (supports up to 32-bit integers) */
 static char numberbuffer[12];
 
+/**
+ * @brief Transmit a signed 32-bit integer with optional base prefix
+ * 
+ * Converts a signed integer to string and transmits via INT0 serial.
+ * Automatically adds prefixes for non-decimal bases:
+ * - 0x for hexadecimal (base 16)
+ * - 0b for binary (base 2)
+ * - No prefix for decimal (base 10)
+ * 
+ * @param i Signed integer to transmit
+ * @param base Number base for conversion (2, 10, 16, etc.)
+ * 
+ * @see INT0_WriteUInt() for unsigned integers
+ * @see INT0_WriteFloat() for floating-point numbers
+ */
 void INT0_WriteInt(int32_t i, uint8_t base) {
     ltoa(i, numberbuffer, base);
     if (base == 16) {
@@ -371,6 +436,21 @@ void INT0_WriteInt(int32_t i, uint8_t base) {
     INT0_WriteString(numberbuffer);
 }
 
+/**
+ * @brief Transmit an unsigned 32-bit integer with optional base prefix
+ * 
+ * Converts an unsigned integer to string and transmits via INT0 serial.
+ * Automatically adds prefixes for non-decimal bases:
+ * - 0x for hexadecimal (base 16)
+ * - 0b for binary (base 2, zero-padded to 8 bits if < 256)
+ * - No prefix for decimal (base 10)
+ * 
+ * @param i Unsigned integer to transmit
+ * @param base Number base for conversion (2, 10, 16, etc.)
+ * 
+ * @see INT0_WriteInt() for signed integers
+ * @see INT0_WriteFloat() for floating-point numbers
+ */
 void INT0_WriteUInt(uint32_t i, uint8_t base) {
     ultoa(i, numberbuffer, base);
     if (base == 16) {
@@ -390,11 +470,29 @@ void INT0_WriteUInt(uint32_t i, uint8_t base) {
     INT0_WriteString(numberbuffer);
 }
 
+/**
+ * @brief Transmit a floating-point number with specified width and precision
+ * 
+ * Converts a float to string and transmits via INT0 serial. Formatting
+ * follows standard printf conventions with dtostrf().
+ * 
+ * @param d Floating-point number to transmit
+ * @param width Total field width (including decimal point and sign)
+ * @param prec Number of decimal places (precision)
+ * 
+ * @see INT0_WriteInt() for integer transmission
+ * @see INT0_WriteUInt() for unsigned integer transmission
+ */
 void INT0_WriteFloat(float d, uint8_t width, uint8_t prec) {
     dtostrf(d, width, prec, numberbuffer);
     INT0_WriteString(numberbuffer);
 }
 
+/** @brief Statically allocated buffer for received command strings */
 char INT0_SerialCommandMgr::commandBuffer[];
+
+/** @brief Current write position in the command buffer */
 uint8_t INT0_SerialCommandMgr::commandBufferPos = 0;
+
+/** @brief Flag indicating a complete command has been received (non-zero if command ready) */
 uint8_t INT0_SerialCommandMgr::_hasCommand = 0;

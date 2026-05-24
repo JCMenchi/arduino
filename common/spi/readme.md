@@ -2,7 +2,9 @@
 
 ## Overview
 
-The **SPIManager** library provides a lightweight Serial Peripheral Interface (SPI) implementation for AVR microcontrollers (Arduino). It supports both **master** and **slave** modes with configurable hardware and software SPI backends.
+The **SPIManager** library provides a lightweight Serial Peripheral Interface (SPI) implementation for AVR microcontrollers.
+It supports both **master** and **slave** modes with configurable hardware and software SPI backends.
+[SPI](https://fr.wikipedia.org/wiki/Serial_Peripheral_Interface) Communication Protocol.
 
 ## Features
 
@@ -18,18 +20,21 @@ The **SPIManager** library provides a lightweight Serial Peripheral Interface (S
 The library uses the following pin mappings for different microcontrollers:
 
 ### ATmega328P (Arduino UNO)
+
 - **MOSI**: PB3 (Pin 11)
 - **MISO**: PB4 (Pin 12)
 - **SCK**: PB5 (Pin 13)
 - **CS**: PB2 (Pin 10)
 
 ### ATmega1284P
+
 - **MOSI**: PB5
 - **MISO**: PB6
 - **SCK**: PB7
 - **CS**: PB4
 
 ### ATmega8535
+
 - **MOSI**: PB5
 - **MISO**: PB6
 - **SCK**: PB7
@@ -172,17 +177,3 @@ spi.setMosiAsOutput();
 - `<avr/interrupt.h>` - Interrupt handling (included but not used in standard mode)
 - `<avr/io.h>` - I/O port definitions
 - `<util/delay.h>` - Delay utilities (used with `SLOW_SPI`)
-
-## License
-
-GNU General Public License v3.0 or later
-Copyright (c) 2015 B. Sidhipong &lt;bsidhipong@gmail.com&gt;
-
-## Common Issues & Solutions
-
-| Issue | Solution |
-|-------|----------|
-| SPI not communicating | Verify CS pin is correctly toggled via `begin()` and `end()` |
-| Data corruption | Try enabling `SLOW_SPI` macro or reduce clock speed |
-| Inconsistent slave mode | Ensure slave is initialized before master starts transmission |
-| MOSI not reading correctly | Call `setMosiAsInput()` and `dummyClock()` for clock generation |

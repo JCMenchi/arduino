@@ -53,14 +53,17 @@ void stopNote() {}
 #else
 
 /**
- * @brief Initialize tone generation on first playNote call
+ * @brief Initialize Timer2 for tone generation on first call
  * 
- * Sets up Timer2 for CTC mode and records the port/pin information.
- * Subsequent calls while tone is active return immediately (0).
+ * Sets up Timer2 in CTC (Clear Timer on Compare) mode and records port/pin information.
+ * Subsequent calls while a tone is active return immediately without reinitializing.
+ * This is a static function only called internally.
  * 
  * @param mcu_port Pointer to PORT register for output pin
  * @param pin_on_port Bit number within the port (0-7)
- * @return 1 if initialized, 0 if tone already active
+ * @return 1 if Timer2 was successfully initialized, 0 if tone already active
+ * 
+ * @see toneBegin uses Timer2A compare interrupt for PWM generation
  */
 static int8_t toneBegin(volatile uint8_t* mcu_port, uint8_t pin_on_port) {
   if (tone_pin == 255) {
@@ -86,18 +89,26 @@ static int8_t toneBegin(volatile uint8_t* mcu_port, uint8_t pin_on_port) {
   return 0;
 }
 
-// frequency (in hertz) and duration (in milliseconds).
 /**
  * @brief Play a tone at specified frequency for a duration
  * 
- * Generates a square wave at the specified frequency using Timer2.
- * Automatically selects appropriate prescaler and OCR value.
+ * Generates a square wave at the specified frequency using Timer2 in CTC mode.
+ * Automatically selects the optimal prescaler and OCR value to achieve the target
+ * frequency. The pin is configured as an output and toggled by the Timer2 interrupt.
  * 
- * @param mcu_port Pointer to PORT register for output pin
- * @param mcu_ddr Pointer to DDR register for output pin
+ * If a tone is already playing, this call returns without starting a new tone.
+ * 
+ * @param mcu_port Pointer to PORT register for output pin (e.g., &PORTB)
+ * @param mcu_ddr Pointer to DDR register for output pin (e.g., &DDRB)
  * @param pin_on_port Bit number within the port (0-7)
- * @param frequency Tone frequency in Hz
- * @param duration Duration in milliseconds (0 = play infinitely)
+ * @param frequency Tone frequency in Hz (supported range depends on CPU clock and prescaler)
+ * @param duration Duration in milliseconds; 0 = play indefinitely until stopNote() is called
+ * 
+ * @note Prescaler selection:
+ * - F_CPU / freq / 2 with various prescalers (1, 8, 32, 64, 128, 256, 1024)
+ * - Selects smallest prescaler that fits OCR value in 8-bit register
+ * 
+ * @note Timer toggle frequency is 2 * frequency (to complete a full square wave cycle)
  */
 void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin_on_port, unsigned int frequency, unsigned long duration) {
   uint8_t prescalarbits = 0b001;
@@ -170,8 +181,10 @@ void playNote(volatile uint8_t* mcu_port, volatile uint8_t* mcu_ddr, uint8_t pin
 /**
  * @brief Disable Timer2 and restore default state
  * 
- * Disables Timer2 compare match interrupt and resets
- * timer control registers to default.
+ * Disables Timer2 compare match interrupt (OCIE2A) and resets Timer2 control
+ * registers to default values. This is an internal helper function.
+ * 
+ * @see disableTimer is called by stopNote() to clean up Timer2 configuration
  */
 void disableTimer() {
   // Disable Timer2 compare A interrupt
@@ -187,8 +200,11 @@ void disableTimer() {
 /**
  * @brief Stop tone generation immediately
  * 
- * Disables Timer2 interrupt, sets tone pin LOW, and marks
- * tone generation as inactive.
+ * Stops the currently playing tone by disabling Timer2 interrupt,
+ * setting the tone output pin LOW, and marking tone generation as inactive.
+ * Safe to call even when no tone is active.
+ * 
+ * @note Restores Timer2 to default state after stopping
  */
 void stopNote() {
   if (tone_pin != 255) {
@@ -202,10 +218,18 @@ void stopNote() {
 }
 
 /**
- * @brief Timer2 compare match interrupt handler
+ * @brief Timer2 compare match interrupt handler (TIMER2_COMPA_vect)
  * 
- * Toggles the tone output pin at each interrupt.
- * Decrements toggle counter and stops tone when complete.
+ * Interrupt service routine that executes on Timer2 compare match A.
+ * Toggles the tone output pin at each interrupt to generate square wave.
+ * 
+ * Behavior:
+ * - If toggle_count > 0: Decrements counter each interrupt (finite duration tone)
+ * - If toggle_count < 0: Plays indefinitely (infinite duration)
+ * - If toggle_count = 0: Stops tone generation and calls stopNote()
+ * 
+ * Toggling the pin at 2 * frequency completes one full square wave period
+ * per note cycle.
  */
 ISR(TIMER2_COMPA_vect) {
 

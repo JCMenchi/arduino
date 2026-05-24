@@ -1,6 +1,6 @@
 # NRF24L01+ Manager Library
 
-A simple C++ library for controlling NRF24L01+ 2.4GHz RF Transceiver modules on AVR microcontrollers. 
+A simple C++ library for controlling NRF24L01+ 2.4GHz RF Transceiver modules on AVR microcontrollers.
 This library provides high-level packet communication interfaces.
 
 ## Features
@@ -270,5 +270,5 @@ nrf24.summary();   // Quick status summary
 
 ## References
 
-- NRF24L01+ Datasheet
-- SPI Communication Protocol
+- NRF24L01+ [Datasheet](./nRF24L01Pluss_v1_0.pdf)
+- [SPI](https://fr.wikipedia.org/wiki/Serial_Peripheral_Interface) Communication Protocol

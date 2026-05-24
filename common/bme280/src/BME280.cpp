@@ -1,3 +1,33 @@
+/**
+ * @file BME280.cpp
+ * @brief Implementation of Bosch BME280/BMP280 environmental sensor driver
+ *
+ * This implementation provides I2C communication with the BME280 (and BMP280 variant)
+ * environmental sensor. It handles:
+ * - I2C register read/write operations
+ * - Sensor configuration and initialization
+ * - Calibration coefficient loading and parsing
+ * - Raw sensor data acquisition
+ * - Fixed-point compensation calculations per Bosch datasheet
+ *
+ * The sensor measures temperature, pressure, and optionally humidity with high accuracy.
+ * All calculations follow the calibration algorithms provided by Bosch in the BME280 datasheet.
+ *
+ * Configuration constants defined at the top of this file control:
+ * - Oversampling rates for temperature, humidity, and pressure
+ * - Operating mode (sleep, forced, or normal)
+ * - Filter settings
+ * - Standby time between measurements
+ *
+ * @note This implementation uses the TinyI2CMaster library for I2C communication.
+ * @note Calibration coefficients are stored in the sensor's EEPROM and read during init.
+ * @note All calculation functions use integer arithmetic for efficiency on microcontrollers.
+ *
+ * @author Based on Arduino BME280 library by Tyler Glenn
+ * @license GNU General Public License v3 (see LICENSE)
+ * @copyright Copyright (C) 2016 Tyler Glenn
+ */
+
 /*
 BME280.cpp
 This code records data from the BME280 sensor and provides an API.
@@ -37,63 +67,152 @@ equation courtesy of Brian McNoldy at http://andrew.rsmas.miami.edu.
 #include <usart_serial.h>
 #endif
 
-#define BME280_I2C_ADDR 0x76
+#define BME280_I2C_ADDR 0x76  ///< I2C slave address of BME280 sensor
 
-// BME280 configuration
-#define TEMP_SAMPLING 3 // use 4x sampling
-#define HUM_SAMPLING 3  // use 4x sampling
-#define PRES_SAMPLING 5 // use 16x oversampling
+/**
+ * @name Sensor Configuration Constants
+ * Control the measurement settings for the BME280 sensor.
+ * @{
+ */
 
+/** @brief Temperature oversampling rate (0-5; 3 = 4x oversampling) */
+#define TEMP_SAMPLING 3
+
+/** @brief Humidity oversampling rate (0-5; 3 = 4x oversampling) */
+#define HUM_SAMPLING 3
+
+/** @brief Pressure oversampling rate (0-5; 5 = 16x oversampling) */
+#define PRES_SAMPLING 5
+
+/** @brief Operating modes: Sleep=0, Forced=1, Normal=3 */
 #define Mode_Sleep 0
 #define Mode_Forced 1
 #define Mode_Normal 3
 
+/** @brief Operating mode for the sensor */
 #define BME280_MODE Mode_Normal
-#define BME280_STANDBY_TIME 5 // 1000 ms
-#define BME280_FILTER 5       // Filter 16
+
+/** @brief Standby time between measurements in normal mode (5 = 1000ms) */
+#define BME280_STANDBY_TIME 5
+
+/** @brief IIR filter coefficient (5 = coefficient 16) */
+#define BME280_FILTER 5
+
+/** @brief Alternative filter setting with filter disabled */
 #define BME280_FILTER_OFF 1
 
+/** @} */
+
+/**
+ * @name Register Addresses
+ * I2C register addresses for reading/writing sensor configuration and data.
+ * @{
+ */
+
+/** @brief Humidity control register address */
 static const uint8_t CTRL_HUM_ADDR = 0xF2;
+/** @brief Measurement control register address */
 static const uint8_t CTRL_MEAS_ADDR = 0xF4;
+/** @brief Configuration register address */
 static const uint8_t CONFIG_ADDR = 0xF5;
+/** @brief Pressure measurement data register address */
 static const uint8_t PRESS_ADDR = 0xF7;
+/** @brief Temperature measurement data register address */
 static const uint8_t TEMP_ADDR = 0xFA;
+/** @brief Humidity measurement data register address */
 static const uint8_t HUM_ADDR = 0xFD;
+/** @brief Temperature calibration data address */
 static const uint8_t TEMP_DIG_ADDR = 0x88;
+/** @brief Pressure calibration data address */
 static const uint8_t PRESS_DIG_ADDR = 0x8E;
+/** @brief Humidity calibration data part 1 address */
 static const uint8_t HUM_DIG_ADDR1 = 0xA1;
+/** @brief Humidity calibration data part 2 address */
 static const uint8_t HUM_DIG_ADDR2 = 0xE1;
+/** @brief Chip ID register address */
 static const uint8_t ID_ADDR = 0xD0;
 
+/** @} */
+
+/**
+ * @name Calibration Data Lengths
+ * Number of bytes to read for each calibration coefficient group.
+ * @{
+ */
+
+/** @brief Number of temperature calibration coefficient bytes */
 static const uint8_t TEMP_DIG_LENGTH = 6;
+/** @brief Number of pressure calibration coefficient bytes */
 static const uint8_t PRESS_DIG_LENGTH = 18;
+/** @brief Number of humidity calibration coefficient bytes (part 1) */
 static const uint8_t HUM_DIG_ADDR1_LENGTH = 1;
+/** @brief Number of humidity calibration coefficient bytes (part 2) */
 static const uint8_t HUM_DIG_ADDR2_LENGTH = 7;
+/** @brief Total calibration data length */
 static const uint8_t DIG_LENGTH = 32;
+/** @brief Length of raw sensor data read in single operation */
 static const uint8_t SENSOR_DATA_LENGTH = 8;
 
-uint16_t dig_T1;
-int16_t dig_T2;
-int16_t dig_T3;
+/** @} */
 
-uint8_t dig_H1;
-int16_t dig_H2;
-uint8_t dig_H3;
-int16_t dig_H4;
-int16_t dig_H5;
-int8_t dig_H6;
+/**
+ * @name Calibration Coefficients - Temperature
+ * Calibration values used to compensate raw temperature measurements.
+ * Stored in sensor EEPROM and loaded during initialization.
+ * @{
+ */
+uint16_t dig_T1;  ///< Temperature calibration T1 coefficient
+int16_t dig_T2;   ///< Temperature calibration T2 coefficient
+int16_t dig_T3;   ///< Temperature calibration T3 coefficient
+/** @} */
 
-uint16_t dig_P1;
-int16_t dig_P2;
-int16_t dig_P3;
-int16_t dig_P4;
-int16_t dig_P5;
-int16_t dig_P6;
-int16_t dig_P7;
-int16_t dig_P8;
-int16_t dig_P9;
+/**
+ * @name Calibration Coefficients - Humidity
+ * Calibration values used to compensate raw humidity measurements.
+ * Stored in sensor EEPROM and loaded during initialization.
+ * Note: These are only valid for BME280 sensors with humidity module.
+ * @{
+ */
+uint8_t dig_H1;   ///< Humidity calibration H1 coefficient
+int16_t dig_H2;   ///< Humidity calibration H2 coefficient
+uint8_t dig_H3;   ///< Humidity calibration H3 coefficient
+int16_t dig_H4;   ///< Humidity calibration H4 coefficient
+int16_t dig_H5;   ///< Humidity calibration H5 coefficient
+int8_t dig_H6;    ///< Humidity calibration H6 coefficient
+/** @} */
+
+/**
+ * @name Calibration Coefficients - Pressure
+ * Calibration values used to compensate raw pressure measurements.
+ * Stored in sensor EEPROM and loaded during initialization.
+ * @{
+ */
+uint16_t dig_P1;  ///< Pressure calibration P1 coefficient
+int16_t dig_P2;   ///< Pressure calibration P2 coefficient
+int16_t dig_P3;   ///< Pressure calibration P3 coefficient
+int16_t dig_P4;   ///< Pressure calibration P4 coefficient
+int16_t dig_P5;   ///< Pressure calibration P5 coefficient
+int16_t dig_P6;   ///< Pressure calibration P6 coefficient
+int16_t dig_P7;   ///< Pressure calibration P7 coefficient
+int16_t dig_P8;   ///< Pressure calibration P8 coefficient
+int16_t dig_P9;   ///< Pressure calibration P9 coefficient
+/** @} */
 
 /****************************************************************/
+/**
+ * @brief Writes a single byte value to a BME280 register via I2C.
+ *
+ * Low-level I2C operation to write configuration data to the sensor.
+ * Used internally for setting sensor parameters.
+ *
+ * @param[in] addr The register address to write to
+ * @param[in] data The byte value to write
+ *
+ * @return true if the write operation succeeded; false otherwise
+ *
+ * @note Uses TinyI2CMaster for I2C communication at address 0x76.
+ * @note If HAS_SERIAL is defined, logs operation to serial port.
+ */
 static bool WriteRegister(uint8_t addr, uint8_t data) {
   #ifdef HAS_SERIAL
   USART_WriteString("BME280 read register\n");
@@ -107,7 +226,23 @@ static bool WriteRegister(uint8_t addr, uint8_t data) {
   TinyI2C.stop();
   return ret;
 }
-/****************************************************************/
+
+/**
+ * @brief Reads one or more bytes from BME280 registers via I2C.
+ *
+ * Low-level I2C operation to read data from the sensor. First sends a register
+ * address, then reads the requested number of bytes from sequential registers.
+ *
+ * @param[in] addr The starting register address to read from
+ * @param[out] data Pointer to byte array where read data will be stored
+ * @param[in] length Number of bytes to read from sequential registers
+ *
+ * @return true (always succeeds in current implementation)
+ *
+ * @note Uses TinyI2CMaster for I2C communication at address 0x76.
+ * @note If HAS_SERIAL is defined, logs operation to serial port.
+ * @note The data pointer must point to a buffer of at least 'length' bytes.
+ */
 static bool ReadRegister(uint8_t addr, uint8_t data[], uint8_t length) {
   #ifdef HAS_SERIAL
   USART_WriteString("BME280 read register\n");
@@ -126,7 +261,27 @@ static bool ReadRegister(uint8_t addr, uint8_t data[], uint8_t length) {
 
   return true;
 }
-/****************************************************************/
+
+/**
+ * @brief Configures the sensor measurement and filter settings.
+ *
+ * Writes the configuration values to the BME280 control registers to set:
+ * - Temperature oversampling (CTRL_MEAS register bits 7:5)
+ * - Pressure oversampling (CTRL_MEAS register bits 4:2)
+ * - Operating mode (CTRL_MEAS register bits 1:0)
+ * - Humidity oversampling (CTRL_HUM register bits 2:0)
+ * - Standby time (CONFIG register bits 7:5)
+ * - IIR filter coefficient (CONFIG register bits 4:2)
+ *
+ * Configuration values are determined by the #define macros at the top of
+ * this file: TEMP_SAMPLING, HUM_SAMPLING, PRES_SAMPLING, BME280_MODE,
+ * BME280_STANDBY_TIME, and BME280_FILTER.
+ *
+ * @return void
+ *
+ * @note This function must be called after ReadTrim() to ensure calibration
+ *       data is loaded before measurements begin.
+ */
 static void WriteSettings() {
   uint8_t ctrlHum, ctrlMeas, config;
 
@@ -144,7 +299,29 @@ static void WriteSettings() {
   WriteRegister(CONFIG_ADDR, config);
 }
 
-/****************************************************************/
+/**
+ * @brief Reads calibration coefficients from the sensor's internal EEPROM.
+ *
+ * Loads all calibration data from the sensor's non-volatile memory. These
+ * calibration coefficients are unique to each sensor and are used to compensate
+ * raw measurement values to accurate temperature, pressure, and humidity readings.
+ *
+ * The function reads calibration data in four groups:
+ * - Temperature calibration (T1, T2, T3): 6 bytes at address 0x88
+ * - Pressure calibration (P1-P9): 18 bytes at address 0x8E
+ * - Humidity calibration part 1 (H1): 1 byte at address 0xA1
+ * - Humidity calibration part 2 (H2-H6): 7 bytes at address 0xE1
+ *
+ * The raw bytes are then unpacked into their respective global variables,
+ * handling multi-byte values with proper endianness and bit extraction
+ * (some calibration values use partial bytes).
+ *
+ * @return void
+ *
+ * @note This function must be called during BME280_begin() initialization.
+ * @note The calibration data is global and persists for the lifetime of the program.
+ * @note Some calibration coefficients (H4, H5) use non-byte-aligned bit fields.
+ */
 static void ReadTrim() {
   uint8_t ord(0);
   uint8_t m_dig[32];

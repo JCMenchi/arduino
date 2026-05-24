@@ -1,5 +1,7 @@
 # SPI driver for AVR CPU with USI (Universal Serial Interface)
 
+[SPI](https://fr.wikipedia.org/wiki/Serial_Peripheral_Interface) Communication Protocol.
+
 ## Key Concepts
 
 - **3-Wire Mode**: The USI is configured for "3-wire mode" to function as SPI. The USI pins (DI, DO, USCK) directly correspond to SPI's
