@@ -180,7 +180,6 @@ uint8_t state = (PINB >> PINB0) & 1;  // PIN - Input register
 | Tool    | Purpose                 | Command                            |
 |---------|-------------------------|------------------------------------|
 | avrdude | Program microcontroller | `avrdude -c usbtiny -p m1284p ...` |
-| minicom | Serial monitor          | `minicom -D /dev/ttyACM0`          |
 | git     | Version control         | `git clone ...`                    |
 | pio     | Build & upload          | `pio run -t upload`                |
 
@@ -213,5 +212,5 @@ uint8_t state = (PINB >> PINB0) & 1;  // PIN - Input register
 2. How do I program it? → See AVRDude commands above
 3. What libraries are available? → Read [common/readme.md](common/readme.md)
 4. How do I set fuses? → Search this page for "Fuse Settings"
-5. What pin is what? → See [Pin Layouts Quick Reference](#pin-layouts-quick-reference)
+5. What pin is what? → See MCU datasheet
 6. Full documentation? → Check individual MCU folder READMEs

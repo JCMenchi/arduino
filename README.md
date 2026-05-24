@@ -179,8 +179,8 @@ pio run
 # Upload
 pio run -t upload
 
-# Monitor serial output
-pio device monitor
+# Monitor serial output and send command
+pio device monitor --echo
 ```
 
 ---

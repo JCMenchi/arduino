@@ -9,6 +9,9 @@
 
 #include <util/delay.h>
 
+#include <SSD1306Display.h>
+SSD1306Display oled(128, 32);
+
 uint32_t previousSendCounter = 0;
 const int32_t send_interval = 60000;
 
@@ -19,8 +22,6 @@ const int32_t send_interval = 60000;
 Nunchuk joystick;
 #endif
 #include <string.h>
-
-uint8_t po = (*(volatile uint8_t *)(0x1B)) + 0x20;
 
 void setup() {
     INT0_Init(PA7, INT0_SerialCommandMgr::serialInput);
@@ -41,6 +42,14 @@ void setup() {
         INT0_WritePString(PSTR("Nunchuk initialized.\n"));
     }
     #endif
+    joystick.display_calibration();
+
+    oled.init(0x01);
+    oled.invert(SSD1306_OFF);
+    oled.flip(SSD1306_ON);
+    oled.drawScreen(0x00, true);
+    oled.drawString(3, 8, "Pos(X,Y): ");
+    oled.drawString(3, 16, "Button: ");
 }
 
 #ifdef HAS_NUNCHUK
@@ -73,17 +82,10 @@ int32_t counter = 0;
 
 int ledState = GPIO_LOW;  // ledState used to set the LED
 uint32_t previousMillis = 0;  // will store last time LED was updated
-const int32_t interval = 500;  // interval at which to blink (milliseconds)
+const int32_t interval = 250;  // interval at which to blink (milliseconds)
 
 void loop() {
     unsigned long currentMillis = milliseconds();
-
-    #ifdef HAS_NUNCHUK
-    //joystick.update();
-    //if (joystick.z_button()) {
-        //display(joystick);
-    //}
-    #endif
 
     if (currentMillis - previousMillis >=  interval) {
         // save the last time you blinked the LED
@@ -96,6 +98,23 @@ void loop() {
         } else {
             ledState = GPIO_LOW;
             GPIO_SET_LOW(A, 0);
+        }
+
+        joystick.update();
+        oled.drawString(60, 8, "          ");
+        oled.drawInt(60, 8, joystick.joystick_x(), 10);
+        oled.drawInt(90, 8, joystick.joystick_y(), 10);
+        
+        if (joystick.c_button()) {
+            oled.drawChar(50, 16, 'C');
+        } else {
+            oled.drawChar(50, 16, ' ');
+        }
+        if (joystick.z_button()) {
+            oled.drawChar(60, 16, 'Z');
+            display(joystick);
+        } else {
+            oled.drawChar(60, 16, ' ');
         }
     }
 

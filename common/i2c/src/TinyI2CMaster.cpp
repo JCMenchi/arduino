@@ -64,18 +64,17 @@ TinyI2CMaster::TinyI2CMaster() : I2Ccount(0), initialised(false) {}
 #define I2C_SDA_PIN PB1
 #endif
 
-/** T2 timing: Delay between SCL high to SDA setup, >1.3us for fast mode */
-#define DELAY_T2TWI (_delay_us(2)) // >1.3us  
-/** T4 timing: Delay for SCL-to-SDA hold time, >0.6us for fast mode */
-#define DELAY_T4TWI (_delay_us(1)) // >0.6us
 
-#define SDA_HIGH GPIO_INPUT_PULLUP(I2C_PORT, I2C_SDA_PIN)
-#define SCL_HIGH GPIO_INPUT_PULLUP(I2C_PORT, I2C_SCL_PIN)
+#define DELAY_I2C (_delay_loop_1(3))
+#define PULSE_CLOCK (_delay_loop_1(3))
 
-#define SDA_LOW GPIO_OUTPUT(I2C_PORT, I2C_SDA_PIN);GPIO_SET_LOW(I2C_PORT, I2C_SDA_PIN)
-#define SCL_LOW GPIO_OUTPUT(I2C_PORT, I2C_SCL_PIN);GPIO_SET_LOW(I2C_PORT, I2C_SCL_PIN)
+#define SDA_HIGH GPIO_INPUT(I2C_PORT, I2C_SDA_PIN)
 
-const double I2C_BUS_DELAY_US = 0.1; // Delay in microseconds for timing control
+// set SCL high with clock stretching
+#define SCL_HIGH GPIO_INPUT(I2C_PORT, I2C_SCL_PIN); while((PINB & 0x01)==0)
+
+#define SDA_LOW GPIO_OUTPUT(I2C_PORT, I2C_SDA_PIN); GPIO_SET_LOW(I2C_PORT, I2C_SDA_PIN)
+#define SCL_LOW GPIO_OUTPUT(I2C_PORT, I2C_SCL_PIN); GPIO_SET_LOW(I2C_PORT, I2C_SCL_PIN)
 
 uint8_t TinyI2CMaster::transfer(uint8_t data) {
   
@@ -85,23 +84,23 @@ uint8_t TinyI2CMaster::transfer(uint8_t data) {
 /*
   Init GPIO. Be sure to add pullup resistor on those 2 pins (3.3 kOhm is good for 5V, 4.7 kOhm is good for 3.3V)
 
-  High resistance pull-up is required for I2C lines to ensure proper logic levels and bus stability. 
+  High resistance external pull-up is required for I2C lines to ensure proper logic levels and bus stability. 
   The open-drain configuration allows multiple devices to share the bus without contention, 
   as any device can pull the line low but cannot drive it high. 
-  The external pull-up resistor ensures that the line returns to a high state when not driven low by any device,
-  enabling reliable communication on the I2C bus.
 */
 void TinyI2CMaster::init(bool fast) {
   if (initialised) return;
 
-  // Configure SCL and SDA pins as open-drain outputs (initially high)
-  GPIO_INPUT_PULLUP(I2C_PORT, I2C_SDA_PIN);
-  GPIO_INPUT_PULLUP(I2C_PORT, I2C_SCL_PIN);
+  // Configure SCL and SDA pins as open-drain outputs (initially high thanks to external pullup restistor)
+  SDA_HIGH;
+  SCL_HIGH;
+  DELAY_I2C;
 
   initialised = true; // Set initialised flag
 }
 
 bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
+
   if (readcount != 0) {
     I2Ccount = readcount;
     readcount = 1;  // Set R/W bit for read
@@ -109,10 +108,10 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
   uint8_t addressRW = address << 1 | readcount; // Shift address and set R/W bit
 
   // send start sequence: SDA goes low while SCL is high, then SCL goes low
+  // stop or init have left both SDA and SCL HIGH
   SDA_LOW;
-  DELAY_T4TWI; // Short delay for START condition
+  PULSE_CLOCK;
   SCL_LOW;
-  _delay_us(I2C_BUS_DELAY_US);
 
   if (!write(addressRW)) {
     stop(); // If address not acknowledged, send STOP condition
@@ -130,16 +129,12 @@ bool TinyI2CMaster::restart(uint8_t address, uint8_t readcount) {
 }
 
 void TinyI2CMaster::stop(void) {
+  // last start/read/write has left SCL & SDA LOW
 
-  // last start/read/write has left SCL LOW
-  SDA_LOW;
-  //_delay_us(I2C_BUS_DELAY_US); // Short delay for STOP condition
-  
   // send stop sequence
   SCL_HIGH;
-  _delay_us(I2C_BUS_DELAY_US); // Short delay before releasing SDA
+  PULSE_CLOCK;
   SDA_HIGH;
-  //_delay_us(I2C_BUS_DELAY_US); // Short delay after STOP condition
 }
 
 bool TinyI2CMaster::write(uint8_t data) {
@@ -151,24 +146,20 @@ bool TinyI2CMaster::write(uint8_t data) {
     } else {
       SDA_LOW;
     }
-    //_delay_us(I2C_BUS_DELAY_US); 
     // Generate clock pulse on SCL (start has left SCL low, so we can just toggle it)
     SCL_HIGH;
-    _delay_us(I2C_BUS_DELAY_US); // Short delay for clock high, allowing slave to read bit
-    
+    PULSE_CLOCK;
     SCL_LOW;
-    //_delay_us(I2C_BUS_DELAY_US); // Short delay for clock low
   }
 
   // read acknowledgment bit from slave
-  SDA_HIGH;
-  //_delay_us(I2C_BUS_DELAY_US);
+  SDA_HIGH; // set SDA as input
+
   SCL_HIGH; // Clock high to allow slave to send ACK
-  _delay_us(I2C_BUS_DELAY_US); // Short delay for ACK bit to be valid
+  PULSE_CLOCK;
   bool ack = (GPIO_READ(I2C_PORT, I2C_SDA_PIN) == GPIO_LOW); // ACK is active low
   SCL_LOW; // Clock low
-  //_delay_us(I2C_BUS_DELAY_US);
-  SDA_LOW;
+  SDA_LOW; // leave SDA LOW
 
   if (!ack) {
     #ifdef HAS_INT0_SERIAL
@@ -185,15 +176,14 @@ uint8_t TinyI2CMaster::read(void) {
   if ((I2Ccount != 0) && (I2Ccount != -1))
     I2Ccount--;
 
-  SDA_HIGH;
+  SDA_HIGH; // set as input
   uint8_t data = 0;
 
   for(int8_t i = 7; i >= 0; i--) {
-    //_delay_us(I2C_BUS_DELAY_US); // Short delay for clock high
-     // Generate clock pulse on SCL (start has left SCL low, so we can just toggle it)
+    DELAY_I2C;
+    // Generate clock pulse on SCL (start has left SCL low, so we can just toggle it)
     SCL_HIGH;
-    _delay_us(I2C_BUS_DELAY_US); // Short delay for clock high
-    //while ((GPIO_READ(I2C_PORT, I2C_SCL_PIN) == GPIO_LOW)); // clock stretching
+    PULSE_CLOCK;
 
     // Set SDA according to the current bit
     if ((GPIO_READ(I2C_PORT, I2C_SDA_PIN) == GPIO_HIGH)) {
@@ -201,28 +191,21 @@ uint8_t TinyI2CMaster::read(void) {
     }
     
     SCL_LOW;
-    _delay_us(I2C_BUS_DELAY_US); // Short delay for clock low
   }
 
   bool ack = I2Ccount == 0;
   if (ack) {
-    SDA_LOW; 
-  } else {
     SDA_HIGH; 
+  } else {
+    SDA_LOW; 
   }
-  _delay_us(I2C_BUS_DELAY_US);
-  
+ 
   SCL_HIGH; // pulse clock
-  _delay_us(I2C_BUS_DELAY_US); 
+  PULSE_CLOCK;
   SCL_LOW;
-  //_delay_us(I2C_BUS_DELAY_US);
 
-  // keep SDA HIGH
+  // keep SDA LOW
   SDA_LOW; 
-
-  //INT0_WritePString(PSTR("I2C read: "));
-  //INT0_WriteUInt(data, 16);
-  //INT0_WritePString(PSTR("\n"));
 
   return data; 
 }
