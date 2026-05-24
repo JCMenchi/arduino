@@ -1,0 +1,106 @@
+
+#include <stddef.h>
+#include <util/delay.h>
+#include <avr/io.h>
+#include <avr/wdt.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "millisec.h"
+#include "nrf24mgr.h"
+#include "SPIManager.h"
+#include <gpio.h>
+#include "usart_serial.h"
+
+const uint8_t ON_LED_PIN = 0;
+const uint8_t RADIO_COM_LED_PIN = 1;
+
+const uint8_t RADIO_CE_PIN = 2;
+
+SPIManager spi;
+NRF24Manager radio;
+
+// init MCU
+void setup() {
+
+  // init debug LED
+  GPIO_OUTPUT(A, ON_LED_PIN);
+  GPIO_OUTPUT(A, RADIO_COM_LED_PIN);
+  GPIO_SET_LOW(A, RADIO_COM_LED_PIN);
+
+  // startup blinking of ON LED
+  GPIO_SET_HIGH(A, ON_LED_PIN);
+  _delay_ms(200);
+  GPIO_SET_LOW(A, ON_LED_PIN);
+  _delay_ms(500);
+  GPIO_SET_HIGH(A, ON_LED_PIN);
+  _delay_ms(200);
+  GPIO_SET_LOW(A, ON_LED_PIN);
+  _delay_ms(500);
+  GPIO_SET_HIGH(A, ON_LED_PIN);
+
+  // init serial com
+  USART_Init(BAUD_RATE_57600, SerialCommandMgr::serialInput);
+
+  // init SPI bus to control NRF24
+  spi.startMaster();
+
+  // init NRF24
+  _delay_ms(100); // give some time to NRF24 module to start
+  radio.init(&spi, RADIO_CE_PIN, 0);
+
+  // ready to enter main loop
+  USART_WriteString("ATmega8535 Ready\n");
+
+  radio.summary();
+}
+
+void execCommand(const char* cmd) {
+  // check if command is defined
+  if (cmd == NULL || strlen(cmd) ==0) return;
+
+  // USART_WriteString("Exec command: ");
+  // USART_WriteString(cmd);
+  // USART_WriteString("\n\n");
+  if (strcmp(cmd, "status") == 0) {
+    radio.summary();
+  } else if (strcmp(cmd, "info") == 0) {
+    radio.info();
+  } else if (strcmp(cmd, "reset") == 0) {
+    radio.reset();
+  } else if (strcmp(cmd, "on") == 0) {
+    radio.changeState(NRF24_POWERUP);
+    radio.listen();
+  } else if (strcmp(cmd, "off") == 0) {
+    radio.changeState(NRF24_POWERDOWN);
+  } else if (strlen(cmd) > 0) {
+    GPIO_SET_HIGH(A, RADIO_COM_LED_PIN);
+    radio.send(cmd);
+    _delay_ms(100); // wait to see LED
+    GPIO_SET_LOW(A, RADIO_COM_LED_PIN);
+    radio.listen();
+  }
+}
+
+void loop() {
+
+  if (SerialCommandMgr::hasCommand()) {
+    execCommand(SerialCommandMgr::command());
+  }
+
+  if (radio.dataAvailable()) {
+    // get current time
+    uint32_t now = milliseconds()/1000;
+    const char* msg = radio.read_message();
+    if (msg && strlen(msg) > 0) {
+      USART_WriteString("now ");
+      USART_WriteUInt(now);
+      USART_WriteString("s: ");
+      USART_WriteString(msg);
+      USART_WriteString("\n");
+    }
+  }
+
+}
+
+#include <main.cpp.h>
