@@ -6,7 +6,6 @@
 #include "TinyI2CMaster.h"
 #include "bitmap_font.h"
 
-//#define HAS_SERIAL
 
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
@@ -43,7 +42,7 @@ void CH1115Display::init(uint8_t contrast) {
   // Read one bit from device
   bool con = TinyI2C.start(CH1115_I2C_ADDRESS, 1);
   if (!con) {
-#ifdef HAS_SERIAL
+#if defined(HAS_SERIAL) && defined(OLED_DEBUG)
     USART_WriteString("I2C connect error\n");
 #endif
     return;
@@ -53,7 +52,7 @@ void CH1115Display::init(uint8_t contrast) {
   uint8_t u = TinyI2C.read();
   TinyI2C.stop();
 
-#ifdef HAS_SERIAL
+#if defined(HAS_SERIAL) && defined(OLED_DEBUG)
   USART_WriteString("Screen status register: 0x");
   USART_WriteInt(u, 16);
 
@@ -64,11 +63,11 @@ void CH1115Display::init(uint8_t contrast) {
 
   uint8_t on = u & 0x40;
   if (on == 0) {
-#ifdef HAS_SERIAL
+#if defined(HAS_SERIAL) && defined(OLED_DEBUG)
     USART_WriteString(" is ON\n");
 #endif
   } else {
-#ifdef HAS_SERIAL
+#if defined(HAS_SERIAL) && defined(OLED_DEBUG)
     USART_WriteString(" is OFF\n");
 #endif
     // turn on

@@ -7,8 +7,6 @@
 #include "TinyI2CMaster.h"
 #include "bitmap_font.h"
 
-//#define HAS_SERIAL
-
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif
@@ -69,14 +67,14 @@ SSD1306Display::~SSD1306Display() {
 //   5 .. timeout
 void SSD1306Display::init(uint8_t contrast) {
 
-  #ifdef HAS_SERIAL
+  #if defined(HAS_SERIAL) && defined(OLED_DEBUG)
   USART_WriteString("I2C connect...\n");
   #endif
   // Init I2C com
   TinyI2C.init();
 
   // Read one bit from device
-#ifdef HAS_SERIAL
+#if defined(HAS_SERIAL) && defined(OLED_DEBUG)
   bool con = TinyI2C.start(SSD1306_I2C_ADDRESS, 1);
   if (!con) {
     USART_WriteString("I2C connect error.\n");
@@ -460,7 +458,7 @@ void SSD1306Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
 
   TinyI2C.start(SSD1306_I2C_ADDRESS, 2);
   r = TinyI2C.read(); // dummy bit start read response
-  #ifdef HAS_SERIAL
+  #if defined(HAS_SERIAL) && defined(OLED_DEBUG)
   USART_WriteString("R ");
   USART_WriteInt(r);
   USART_WriteString(" ");
@@ -468,7 +466,7 @@ void SSD1306Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
 
   r = TinyI2C.read();
 
-  #ifdef HAS_SERIAL
+  #if defined(HAS_SERIAL) && defined(OLED_DEBUG)
   USART_WriteInt(r);
   USART_WriteString("\n");
   TinyI2C.stop();

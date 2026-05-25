@@ -2,10 +2,13 @@
 #include <TinyI2CMaster.h>
 #include <util/delay.h>
 
-//#define HAS_SERIAL
-
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
+#endif
+
+#ifdef HAS_INT0_SERIAL
+#include <int0_serial.h>
+#include <avr/pgmspace.h>
 #endif
 
 #include "nunchuk.h"
@@ -95,7 +98,7 @@ bool Nunchuk::initialize() {
   // for unencrypted use: START 0xF0, 0x55, STOP - START, 0xFB, 0x00, STOP
   bool con = TinyI2C.start(NUNCHUK_I2C_ID, 0);
   if (!con) {
-#ifdef HAS_SERIAL
+#if defined(HAS_SERIAL) && defined(NUNCHUK_DEBUG)
     USART_WriteString("I2C connect error\n");
 #endif
     return false;
@@ -143,7 +146,7 @@ bool Nunchuk::initialize() {
   TinyI2C.stop();
 
   if (readID1 == NUNCHUK_DEVICE_ID_PART1 && readID2 == NUNCHUK_DEVICE_ID_PART2) {
-    #ifdef HAS_SERIAL
+    #if defined(HAS_SERIAL) && defined(NUNCHUK_DEBUG)
       USART_WriteString("# Wii Nunchuk is OK.\n");
     #endif
     // read calibration data
@@ -154,7 +157,7 @@ bool Nunchuk::initialize() {
     _delay_ms(100);
     update();
   } else {
-    #ifdef HAS_SERIAL
+    #if defined(HAS_SERIAL) && defined(NUNCHUK_DEBUG)
     USART_WriteString("Not a Nunchuk. ID found: ");
     USART_WriteUInt(readID1, 16);
     USART_WriteString(" ");
@@ -213,7 +216,7 @@ bool Nunchuk::update() {
     _joystick_prev_position = joystick_pos;
     _buttons = _buffer[5] & 0x3;
 
-    #ifdef HAS_SERIAL
+    #if defined(HAS_SERIAL) && defined(NUNCHUK_DEBUG)
     if (_buttons != 3) {
       USART_WriteString("Button: ");
       USART_WriteString(z_button()?"Z":"z");
@@ -445,6 +448,71 @@ void Nunchuk::display_calibration() {
   USART_WriteFloat(_az_res, 6, 3);
   USART_WriteString("\n");
 
+  #elif defined(HAS_INT0_SERIAL)
+  INT0_WriteString("Nunchuk calibration:\n");
+  INT0_WriteString("  JX ");
+  INT0_WriteUInt(_jx_min);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_jx_center);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_jx_max);
+  INT0_WriteString("\n");
+  INT0_WriteString("  JY ");
+  INT0_WriteUInt(_jy_min);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_jy_center);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_jy_max);
+  INT0_WriteString("\n");
+
+  INT0_WriteString("  Acc 0G ");
+  INT0_WriteUInt(_ax_0g);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_ay_0g);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_az_0g);
+  INT0_WriteString("\n");
+
+  INT0_WriteString("  Acc 1G ");
+  INT0_WriteUInt(_ax_1g);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_ay_1g);
+  INT0_WriteString(" ");
+  INT0_WriteUInt(_az_1g);
+  INT0_WriteString("\n");
+
+  float ming = -1.0f * (float)_ax_0g * _ax_res;
+  float maxg = (1024.0f - _ax_0g) * _ax_res;
+
+  INT0_WriteString("  AccX min=");
+  INT0_WriteFloat(ming, 4, 1);
+  INT0_WriteString(" max=");
+  INT0_WriteFloat(maxg, 4, 1);
+  INT0_WriteString(" res=");
+  INT0_WriteFloat(_ax_res, 6, 3);
+  INT0_WriteString("\n");
+
+  ming = -1.0f * (float)_ay_0g * _ay_res;
+  maxg = (1024.0f - _ay_0g) * _ay_res;
+
+  INT0_WriteString("  AccY min=");
+  INT0_WriteFloat(ming, 4, 1);
+  INT0_WriteString(" max=");
+  INT0_WriteFloat(maxg, 4, 1);
+  INT0_WriteString(" res=");
+  INT0_WriteFloat(_ay_res, 6, 3);
+  INT0_WriteString("\n");
+
+  ming = -1.0f * (float)_az_0g * _az_res;
+  maxg = (1024.0f - _az_0g) * _az_res;
+
+  INT0_WriteString("  AccZ min=");
+  INT0_WriteFloat(ming, 4, 1);
+  INT0_WriteString(" max=");
+  INT0_WriteFloat(maxg, 4, 1);
+  INT0_WriteString(" res=");
+  INT0_WriteFloat(_az_res, 6, 3);
+  INT0_WriteString("\n");
   #endif
 }
 
@@ -501,7 +569,28 @@ void Nunchuk::display() {
   USART_WriteString(" ");
   USART_WriteString(c_button()?"C":"c");
   USART_WriteString("\n");
+#elif defined(HAS_INT0_SERIAL)
+  INT0_WriteString("Nunchuk info:\n");
 
+  INT0_WriteString("joystick: ");
+  INT0_WriteUInt(joystick_x());
+  INT0_WriteString(", ");
+  INT0_WriteUInt(joystick_y());
+  INT0_WriteString("\n");
+
+  INT0_WriteString("accel: ");
+  INT0_WriteUInt(x_acceleration());
+  INT0_WriteString(", ");
+  INT0_WriteUInt(y_acceleration());
+  INT0_WriteString(", ");
+  INT0_WriteUInt(z_acceleration());
+  INT0_WriteString("\n");
+
+  INT0_WriteString("Button: ");
+  INT0_WriteString(z_button()?"Z":"z");
+  INT0_WriteString(" ");
+  INT0_WriteString(c_button()?"C":"c");
+  INT0_WriteString("\n");
 #endif
 }
 

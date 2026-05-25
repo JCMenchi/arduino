@@ -29,8 +29,6 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-//#define HAS_SERIAL
-
 #ifdef HAS_SERIAL
 #include <usart_serial.h>
 #endif
@@ -115,7 +113,7 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
 
   if (!write(addressRW)) {
     stop(); // If address not acknowledged, send STOP condition
-    #ifdef HAS_INT0_SERIAL
+    #if defined(HAS_INT0_SERIAL) && defined(I2C_DEBUG)
     INT0_WritePString(PSTR("I2C start failed\n"));
     #endif
     return false; // Start failed due to no ACK
@@ -162,7 +160,7 @@ bool TinyI2CMaster::write(uint8_t data) {
   SDA_LOW; // leave SDA LOW
 
   if (!ack) {
-    #ifdef HAS_INT0_SERIAL
+    #if defined(HAS_INT0_SERIAL) && defined(I2C_DEBUG)
     INT0_WritePString(PSTR("I2C write NACK\n"));
     #endif
     return false; // No ACK received, write failed
@@ -795,7 +793,7 @@ uint8_t TinyI2CMaster::read(void) {
   while (!(TWCR & 1 << TWINT) && max--);  // Wait for completion
 
   if (max == 0) {
-  #ifdef HAS_SERIAL
+  #if defined(HAS_SERIAL) && defined(I2C_DEBUG)
     USART_WriteString("TinyI2CMaster::read error 1\n");
   #endif
   }
@@ -850,7 +848,7 @@ bool TinyI2CMaster::write(uint8_t data) {
   while (!(TWCR & 1 << TWINT) && max--);  // Wait for completion
 
   if (max == 0) {
-  #ifdef HAS_SERIAL
+  #if defined(HAS_SERIAL) && defined(I2C_DEBUG)
     USART_WriteString("TinyI2CMaster::write error 1\n");
   #endif
   }
@@ -908,7 +906,7 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
   while (!(TWCR & 1 << TWINT) && max--);
 
   if (max == 0) {
-    #ifdef HAS_SERIAL
+    #if defined(HAS_SERIAL) && defined(I2C_DEBUG)
     USART_WriteString("TinyI2CMaster::start error 1\n");
     #endif
     return false;
@@ -916,7 +914,7 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
 
   // Verify START condition was transmitted
   if ((TWSR & 0xF8) != TWSR_START && (TWSR & 0xF8) != TWSR_REP_START) {
-    #ifdef HAS_SERIAL
+    #if defined(HAS_SERIAL) && defined(I2C_DEBUG)
     USART_WriteString("TinyI2CMaster::start error 2\n");
     #endif
     return false;
@@ -930,7 +928,7 @@ bool TinyI2CMaster::start(uint8_t address, uint8_t readcount) {
   while (!(TWCR & 1 << TWINT) && max--);
 
   if (max == 0) {
-    #ifdef HAS_SERIAL
+    #if defined(HAS_SERIAL) && defined(I2C_DEBUG)
     USART_WriteString("TinyI2CMaster::start error 3\n");
     #endif
     return false;
@@ -984,7 +982,7 @@ void TinyI2CMaster::stop(void) {
   while ((TWCR & 1 << TWSTO) && max--); // wait until stop and bus released
 
   if (max == 0) {
-    #ifdef HAS_SERIAL
+    #if defined(HAS_SERIAL) && defined(I2C_DEBUG)
     USART_WriteString("TinyI2CMaster::stop error 1\n");
     #endif
   }

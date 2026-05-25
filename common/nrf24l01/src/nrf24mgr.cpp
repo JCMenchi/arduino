@@ -732,7 +732,7 @@ uint8_t NRF24Manager::send_binary(uint8_t *msg, uint8_t length) {
   return length;
 }
 
-#ifdef HAS_SERIAL
+#if defined(HAS_SERIAL) && defined(NRF24_DEBUG)
 
 /**
  * @brief Print module information/statistics
@@ -865,7 +865,7 @@ void NRF24Manager::summary() {
   USART_WritePString(PSTR("\n"));
 }
 
-#elif defined(HAS_INT0_SERIAL)
+#elif defined(HAS_INT0_SERIAL) && defined(NRF24_DEBUG)
 
 /**
  * @brief Print module information/statistics
