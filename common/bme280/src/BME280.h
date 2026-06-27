@@ -134,18 +134,18 @@ uint16_t BME280_hum(int32_t &temp);
  * and humidity (if supported by the sensor). This is the recommended function
  * for most applications.
  *
- * @param[out] pressure Temperature reading in fixed-point format
- *             - Resolution: 0.01°C per unit
- *             - To get Celsius: divide by 100
- *             - Example: value 2137 = 21.37°C
- *             - Range: -4000 to 8500 (approx -40°C to +85°C)
- *
- * @param[out] temperature Pressure reading in fixed-point Q24.8 format
+ * @param[out] pressure Pressure reading in fixed-point Q24.8 format
  *             - Upper 24 bits: integer Pa value
  *             - Lower 8 bits: fractional part (256 = 1 Pa)
  *             - To get Pascals: divide by 256
  *             - Example: value 24674867 = 96386.2 Pa = 963.862 hPa
  *             - Range: 30000 Pa to 110000 Pa
+ * 
+ * @param[out] temperature Temperature reading in fixed-point format
+ *             - Resolution: 0.01°C per unit
+ *             - To get Celsius: divide by 100
+ *             - Example: value 2137 = 21.37°C
+ *             - Range: -4000 to 8500 (approx -40°C to +85°C)
  *
  * @param[out] humidity Humidity reading in fixed-point Q22.10 format
  *             - Upper 22 bits: integer %RH value
@@ -157,9 +157,6 @@ uint16_t BME280_hum(int32_t &temp);
  *
  * @return void
  *
- * @note Parameters are named counter-intuitively due to legacy C function signature.
- *       The order in the parameter list does not match the order of the names.
- *       Parameters are: @c pressure, @c temperature, @c humidity (in that order)
  *
  * Example usage:
  * @code

@@ -76,10 +76,10 @@ equation courtesy of Brian McNoldy at http://andrew.rsmas.miami.edu.
  */
 
 /** @brief Temperature oversampling rate (0-5; 3 = 4x oversampling) */
-#define TEMP_SAMPLING 3
+#define TEMP_SAMPLING 5
 
 /** @brief Humidity oversampling rate (0-5; 3 = 4x oversampling) */
-#define HUM_SAMPLING 3
+#define HUM_SAMPLING 5
 
 /** @brief Pressure oversampling rate (0-5; 5 = 16x oversampling) */
 #define PRES_SAMPLING 5
@@ -481,7 +481,7 @@ void BME280_read(int32_t &pressure, int32_t &temp, uint16_t &humidity) {
   uint32_t rawHumidity = (data[6] << 8) | data[7];
 
   int32_t t_fine;
-  temp = CalculateTemperature(rawTemp, t_fine);
+  temp = CalculateTemperature(rawTemp, t_fine); // init t_fine for pressure and humidity calculations
   pressure = CalculatePressure(rawPressure, t_fine);
   humidity = CalculateHumidity(rawHumidity, t_fine);
 }
