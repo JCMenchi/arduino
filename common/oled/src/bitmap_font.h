@@ -1,14 +1,38 @@
+/**
+ * @file bitmap_font.h
+ * @brief Bitmap font data for OLED text rendering
+ * 
+ * Contains 5x8 pixel font bitmaps for displaying ASCII characters on OLED displays.
+ * Font data is stored in program memory (PROGMEM) for efficient use on AVR microcontrollers.
+ * Supports extended ASCII characters when ASCII_EXT is defined.
+ * 
+ */
+
 #ifndef _BITMAP_FONT_H
 #define _BITMAP_FONT_H
 
+/** @brief Font character width in pixels */
 #define FONT_CHAR_WIDTH 5
+/** @brief Font character height in pixels */
 #define FONT_CHAR_HEIGHT 8
 
 #include <avr/pgmspace.h>
 
 //#define ASCII_EXT
 
-// Standard ASCII 5x7 font ,default.
+/**
+ * @brief Standard ASCII 5x7 font bitmap data
+ * 
+ * Contains bitmap data for ASCII characters 0x20-0x7E (space through tilde),
+ * plus extended characters if ASCII_EXT is defined.
+ * Each character is stored as 5 bytes (one per column), representing a 5-pixel
+ * wide character. Characters are 8 pixels tall but rendered in 7-pixel height.
+ * 
+ * Format: Each byte represents one pixel column, with LSB at top and MSB at bottom.
+ * 
+ * @note Stored in program memory (PROGMEM) - use pgm_read_byte() to access
+ * @note To use extended ASCII (accented characters), define ASCII_EXT before including
+ */
 const PROGMEM unsigned char small_font[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, // Space
     0x00, 0x00, 0x5F, 0x00, 0x00,

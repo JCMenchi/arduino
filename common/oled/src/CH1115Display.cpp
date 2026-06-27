@@ -1,4 +1,12 @@
 
+/**
+ * @file CH1115Display.cpp
+ * @brief Implementation of CH1115 OLED display driver
+ * 
+ * Provides I2C-based control for CH1115 OLED display controllers.
+ * Includes graphics primitives, text rendering, and display effects.
+ */
+
 #include <avr/pgmspace.h>
 #include <stdlib.h>
 
@@ -11,6 +19,11 @@
 #include <usart_serial.h>
 #endif
 
+/**
+ * @brief Utility macro to swap two uint8_t values
+ * @param a First value
+ * @param b Second value
+ */
 #define CH1115_Swap(a, b)                                                      \
   {                                                                            \
     uint8_t t = a;                                                             \
@@ -18,23 +31,38 @@
     b = t;                                                                     \
   }
 
+/**
+ * @brief Constructor - Initialize display dimensions
+ * Stores display width and height for coordinate calculations
+ */
 CH1115Display::CH1115Display(uint8_t w, uint8_t h) {
   _width = w;
   _height = h;
 }
 
+/**
+ * @brief Destructor - Cleanup (currently no resources to release)
+ */
 CH1115Display::~CH1115Display() {
 }
 
-#define CH1115_STATUS 0x15
+#define CH1115_STATUS 0x15  ///< Status register address
 
-// Possible Wire error code for endTransmission()
-//   0 .. success
-//   1 .. length to long for buffer
-//   2 .. address send, NACK received
-//   3 .. data send, NACK received
-//   4 .. other twi error (lost bus arbitration, bus error, ..)
-//   5 .. timeout
+/**
+ * @brief Initialize I2C interface and display controller
+ * 
+ * Sets up I2C communication, verifies device presence, and configures
+ * the display with the specified contrast level. Sends initialization
+ * commands per CH1115 datasheet.
+ * 
+ * @note I2C Error codes (from TinyI2C):
+ *  - 0: success
+ *  - 1: length too long for buffer
+ *  - 2: address send, NACK received
+ *  - 3: data send, NACK received
+ *  - 4: other TWI error (lost arbitration, bus error)
+ *  - 5: timeout
+ */
 void CH1115Display::init(uint8_t contrast) {
   // Init I2C com
   TinyI2C.init();
@@ -80,54 +108,60 @@ void CH1115Display::init(uint8_t contrast) {
   this->contrast(contrast);
 }
 
-// 18. Display OFF/ON: (AEH - AFH)
-// Alternatively turns the display on and off.
-// When D = “L”, Display OFF OLED. (POR)  0xAE
-// When D = “H”, Display ON OLED. 0xAF
-// When the display OFF command is executed, power saver mode will be entered.
-// Sleep mode:
-// This mode stops every operation of the OLED display system, and can reduce
-// current consumption nearly to a static current value if no access is made
-// from the microprocessor. The internal status in the sleep mode is as follows:
-// 1)Stops the oscillator circuit and DC-DC circuit.
-// 2)Stops the OLED drive and outputs Hz as the segment/common driver output.
-// 3)Holds the display data and operation mode provided before the start of the
-// sleep mode. 4)The MPU can access to the built-in display RAM.
+/**
+ * @brief Enable or disable display output
+ * 
+ * Sends command 0xAF to turn ON or 0xAE to turn OFF.
+ * When OFF, enters power-saving sleep mode while preserving RAM contents.
+ * 
+ * Per CH1115 Datasheet Section 18 (Display OFF/ON):
+ *  - OFF (0xAE): Stops oscillator and DC-DC circuits, reduces current consumption
+ *  - ON (0xAF): Normal operation mode
+ */
 void CH1115Display::enable(uint8_t on) { send_command(on ? 0xAF : 0xAE); }
 
-// 4. Additional Horizontal Scroll Setup: (Three Bytes Command)
-// This command consists of 3 consecutive bytes to set up the horizontal scroll
-// parameters. It determined the scrolling start column position and end column
-// position. The end column position must be larger than start column position.
-//
-// - Additional Horizontal Scroll Setup Mode Set: (24H)
-//       | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 |
-//       |  0 |  0 |  1 |  0 |  0 |  1 |  0 |  0 | -> 0x24
-//       | A7 | A6 | A5 | A4 | A3 | A2 | A1 | A0 | -> start colum 0 to 127
-//       | B7 | B6 | B5 | B4 | B3 | B2 | B1 | B0 | -> end column  0 to 127
-//
-// 5. Horizontal Scroll Setup: (Four Bytes Command)
-// This command consists of 4 consecutive bytes to set up the horizontal scroll
-// parameters. It determined the number of horizontal scroll per step ,
-// scrolling start page, time interval and end page. Before issuing this
-// command, the horizontal scroll must be deactivated (2EH). Otherwise, ram
-// content may be corrupted.
-//
-// - Horizontal Scroll Setup Mode Set: (26H - 27H)
-//     | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 |
-//     |  0 |  0 |  1 |  0 |  0 | 1  |  1 |  D | D is direction 0 -> right, 1 ->
-//     left |  * |  * |  * |  * |  * | A2 | A1 | A0 | start page address 0 to 7
-//     |  * |  * |  * |  * |  * | B2 | B1 | B0 | time interval number of frame
-//     |  * |  * |  * |  * |  * | C2 | C1 | C0 | end page address   0 to 7
-//
-//           000   6 frames(POR)
-//           001  32 frames
-//           010  64 frames
-//           011 128 frames
-//           100   3 frames
-//           101   4 frames
-//           110   5 frames
-//           111   2 frames
+/**
+ * @brief Configure the scrolling area and parameters
+ * 
+ * Sets up horizontal scroll region and timing per CH1115 datasheet.
+ * Configuration must be completed before calling scroll() to activate.
+ * 
+ * Per CH1115 Datasheet Sections 4-5:
+ *  - Command 0x24: Set column range (start to end)
+ *  - Command 0x26-0x27: Scroll direction (0x26=right, 0x27=left)
+ *  - Followed by: startPage, timeInterval, endPage
+ * 
+ * @implementation Sends command sequence:
+ *  1. 0x24 (Additional H-scroll setup)
+ *       | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 |
+ *       |  0 |  0 |  1 |  0 |  0 |  1 |  0 |  0 | -> 0x24
+ *       | A7 | A6 | A5 | A4 | A3 | A2 | A1 | A0 | -> start colum 0 to 127
+ *       | B7 | B6 | B5 | B4 | B3 | B2 | B1 | B0 | -> end column  0 to 127
+ *
+ * 5. Horizontal Scroll Setup: (Four Bytes Command)
+ * This command consists of 4 consecutive bytes to set up the horizontal scroll
+ * parameters. It determined the number of horizontal scroll per step ,
+ * scrolling start page, time interval and end page. Before issuing this
+ * command, the horizontal scroll must be deactivated (2EH). Otherwise, ram
+ * content may be corrupted.
+ *
+ * - Horizontal Scroll Setup Mode Set: (26H - 27H)
+ *     | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 |
+ *     |  0 |  0 |  1 |  0 |  0 | 1  |  1 |  D | D is direction 0 -> right, 1 ->
+ *     left |  * |  * |  * |  * |  * | A2 | A1 | A0 | start page address 0 to 7
+ *     |  * |  * |  * |  * |  * | B2 | B1 | B0 | time interval number of frame
+ *     |  * |  * |  * |  * |  * | C2 | C1 | C0 | end page address   0 to 7
+ *
+ *           000   6 frames(POR)
+ *           001  32 frames
+ *           010  64 frames
+ *           011 128 frames
+ *           100   3 frames
+ *           101   4 frames
+ *           110   5 frames
+ *           111   2 frames
+ */
+
 void CH1115Display::scrollArea(uint8_t startPage, uint8_t endPage,
                                uint8_t startCol, uint8_t endCol, uint8_t dir,
                                uint8_t nbFrame) {
@@ -146,6 +180,7 @@ void CH1115Display::scrollArea(uint8_t startPage, uint8_t endPage,
   send_command(nbFrame);
   send_command(endPage < 8 ? endPage : 7);
 }
+
 // 6. Set Scroll Mode: (28H – 2BH)
 // Control continuous or single screen scroll.
 //         | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 |
@@ -171,6 +206,13 @@ void CH1115Display::scrollArea(uint8_t startPage, uint8_t endPage,
 // Changing horizontal scroll setup parameters.  Changing scroll mode setup
 // parameters. After the deactivate horizontal scroll issued, the display of
 // screen is reset to original status.
+
+/**
+ * @brief Start, stop, or configure scrolling mode
+ * 
+ * Activates scrolling in the region previously configured by scrollArea().
+ * Commands sent: 0x2E (stop), 0x28+0x2F (continuous), 0x29+0x2F (once), 0x2A+0x2F (column)
+ */
 void CH1115Display::scroll(uint8_t mode) {
   if (mode == CH1115_SCROLL_OFF) {
     send_command(0x2E);
@@ -205,6 +247,11 @@ void CH1115Display::scroll(uint8_t mode) {
 // this command is input, the contrast control mode is released after the
 // contrast data register has been set.// When the contrast control function is
 // not used, set the D7 - D0 to 10000000.
+
+/**
+ * @brief Set display contrast level
+ * Adjusts segment output current (256 levels: 0x00-0xFF)
+ */
 void CH1115Display::contrast(uint8_t contrast) {
   send_command(0x81);     // Contrast Control Mode Set
   send_command(contrast); // Contrast Data Register Set:
@@ -227,7 +274,10 @@ void CH1115Display::contrast(uint8_t contrast) {
 //
 // When ADC (bit0) = “L”, the right rotates (normal direction). (POR)
 // When ADC (bit0) = “H”, the left rotates (reverse direction).
-void CH1115Display::flip(uint8_t on) {
+/**
+ * @brief Flip display vertically and horizontally
+ * Rotates display 180 degrees by remapping COM scan and SEG output
+ */void CH1115Display::flip(uint8_t on) {
   if (on) {
     send_command(0xC8); // Common Output Scan Direction
     send_command(0xA1); // SEG REMAP
@@ -237,51 +287,53 @@ void CH1115Display::flip(uint8_t on) {
   }
 }
 
-// 3. Set Breathing Display Effect: (Double Bytes Command)
-// This command set Breathing Display Effect ON/OFF and Time Interval.
-// -BYTE1: Breathing Light Set: (23H)
-//
-// - BYTE2
-//       D7   | D6 | D5 | D4 | D3 | D2 | D1 | D0
-//     ON/OFF |    |    | A4 | A3 | A2 | A1 | A0
-//
-//    When D7 = ”L”, Breathing Light OFF. (POR)
-//    When D7 = ”H”, Breathing Light ON.
-//
-//  Breathing Display Effect Maximum Brightness Adjust Set: (A4 – A3)
-//    00 -> 256, 01 -> 128, 10 -> 64, 11 -> 32
-//
-//  Breathing Display Effect Time Interval Set: (A2 – A0)
-//    A2-A0 define number of frame 000 -> 1 frame, 111 -> 8 frames
+/**
+ * @brief Enable or disable breathing (pulsing) display effect
+ * 
+ * Creates a fading in/out visual effect by modulating brightness.
+ * Per CH1115 Datasheet Section 3:
+ *  - Command 0x23: Breathing Light Set
+ *  - Parameter 0x82 (ON): Max brightness 256, 3-frame interval
+ *  - Parameter 0x00 (OFF): Breathing disabled
+ */
 void CH1115Display::breathingEffect(uint8_t on) {
   send_command(0x23);
   // when ON, maxBrightness=256, 3 frames
   send_command(on ? 0x82 : 0x00);
 }
 
-// 15. Set Normal/Reverse Display: (A6H -A7H)
-// Reverses the display ON/OFF status without rewriting the contents of the
-// display data RAM. When D = “L”, the RAM data is high, being OLED ON potential
-// (normal display). (POR) 0xA6 When D = “H”, the RAM data is low, being OLED ON
-// potential (reverse display)  0xA7
+/**
+ * @brief Invert display colors (ON pixels become OFF and vice versa)
+ * 
+ * Reverses display output without modifying RAM contents.
+ * Per CH1115 Datasheet Section 15:
+ *  - 0xA6: Normal mode (RAM high = pixel ON)
+ *  - 0xA7: Reverse mode (RAM high = pixel OFF)
+ */
 void CH1115Display::invert(uint8_t on) { send_command(on ? 0xA7 : 0xA6); }
 
-// CH1115 display addressing
-// Display is divided in pages each page has a height of 8 pixels
+/**
+ * @brief Set I2C RAM address for drawing operations
+ * 
+ * Display uses page-based addressing: 8 pages of 8 pixels height each.
+ * Configures both page (y) and column (x) addresses via I2C.
+ * 
+ * Addressing scheme per CH1115 Datasheet:
+ *  - Column: Split into LSB (0x00-0x0F) and MSB (0x10-0x1F) commands
+ *  - Page: Single command 0xB0-0xB7 for pages 0-7
+ * 
+ * @implementation Sends 6 I2C bytes:
+ *  1. 0x80 (data control)
+ *  2. 0xB0 | (y/8) (page address)
+ *  3. 0x80
+ *  4. 0x00 | (x & 0x0F) (column LSB)
+ *  5. 0x00
+ *  6. 0x10 | ((x & 0xF0)>>4) (column MSB)
+ */
+#define CH1115_SET_COLADD_LSB 0x00 ///< Lower column address command base
+#define CH1115_SET_COLADD_MSB 0x10 ///< Upper column address command base
+#define CH1115_SET_PAGEADD 0xB0    ///< Page address command base (0xB0-0xB7)
 
-// Specifies column address of display RAM. Divide the column address into 4
-// higher bits and 4 lower bits. Set each of them into successions. When the
-// microprocessor repeats to access to the display RAM, the column address
-// counter is incremented during each access until address 127 is accessed. The
-// page address is not changed during this time.
-#define CH1115_SET_COLADD_LSB 0x00 // 1. Set Lower Column Address: (00H - 0FH)
-#define CH1115_SET_COLADD_MSB 0x10 // 2. Set Higher Column Address: (10H – 1FH)
-// 19. Set Page Address: (B0H - B7H)
-// Specifies page address to load display RAM data to page address register. Any
-// RAM data bit can be accessed when its page address and column address are
-// specified. The display remains unchanged even when the page address is
-// changed. 4 lower bits are used to select the page from 0 to 7
-#define CH1115_SET_PAGEADD 0xB0
 void CH1115Display::setAddress(uint8_t x, uint8_t y) {
   TinyI2C.start(CH1115_I2C_ADDRESS, 0);
   TinyI2C.write(0x80);
@@ -293,6 +345,16 @@ void CH1115Display::setAddress(uint8_t x, uint8_t y) {
   TinyI2C.stop();
 }
 
+/**
+ * @brief Fill entire screen with pattern
+ * 
+ * Fills all display RAM with the specified pattern byte.
+ * Optionally draws a border frame.
+ * 
+ * @implementation Iterates through each page (height/8) and fills
+ * all columns with the pattern. Border mode sets first/last columns
+ * and first/last bits of top/bottom pages to 0xFF.
+ */
 void CH1115Display::drawScreen(uint8_t pattern, bool border) {
   for (uint8_t page = 0; page < (_height / 8); page++) {
     setAddress(0, page * 8);
@@ -315,6 +377,12 @@ void CH1115Display::drawScreen(uint8_t pattern, bool border) {
   }
 }
 
+/**
+ * @brief Fill single page (8-pixel row) with pattern
+ * 
+ * Fills one complete page (all columns) with pattern byte.
+ * Page height is 8 pixels; y-coordinate will be rounded to page boundary.
+ */
 void CH1115Display::drawPage(uint8_t p, uint8_t pattern) {
   setAddress(0, p * 8);
   TinyI2C.start(CH1115_I2C_ADDRESS, 0);
@@ -325,6 +393,12 @@ void CH1115Display::drawPage(uint8_t p, uint8_t pattern) {
   TinyI2C.stop();
 }
 
+/**
+ * @brief Fill portion of a page with pattern
+ * 
+ * Fills a partial page region (columns startcol to startcol+nbcol-1)
+ * with the specified pattern byte.
+ */
 void CH1115Display::drawPage(uint8_t p, uint8_t startcol, uint8_t nbcol,
                              uint8_t pattern) {
   setAddress(startcol, p * 8);
@@ -336,14 +410,19 @@ void CH1115Display::drawPage(uint8_t p, uint8_t startcol, uint8_t nbcol,
   TinyI2C.stop();
 }
 
-// 27. Read-Modify-Write: (E0H)
-//    A pair of Read-Modify-Write and End commands must always be used. Once
-//    read-modify-write is issued, column address is not incremental by read
-//    display data command but incremental by write display data command only.
-//    It continues until End command is issued. When the End is issued, column
-//    address returns to the address when read-modify-write is issued. This can
-//    reduce the microprocessor load when data of a specific display area is
-//    repeatedly changed during cursor blinking or others.
+/**
+ * @brief Begin page-based pixel drawing sequence
+ * 
+ * Initiates Read-Modify-Write mode (command 0xE0) for efficient pixel updates.
+ * Must be paired with endPageDrawing().
+ * 
+ * Per CH1115 Datasheet Section 27 (Read-Modify-Write):
+ *  - Column address auto-increments on write but not on read
+ *  - Allows multiple pixel updates without re-addressing
+ *  - Column returns to initial address when End (0xEE) issued
+ * 
+ * @note Must call endPageDrawing() after all pixel updates complete.
+ */
 void CH1115Display::startPageDrawing(uint8_t x, uint8_t y) {
   setAddress(x, y);
 
@@ -353,6 +432,19 @@ void CH1115Display::startPageDrawing(uint8_t x, uint8_t y) {
   TinyI2C.write(0xE0);
 }
 
+/**
+ * @brief Update a single pixel within current page drawing operation
+ * 
+ * Reads current column byte, modifies single pixel bit, and writes back.
+ * Uses Read-Modify-Write mode to minimize I2C transfers.
+ * 
+ * Pixel operations:
+ *  - WHITE_COLOR: Set bit (pixel ON)
+ *  - BLACK_COLOR: Clear bit (pixel OFF)
+ *  - INVERSE_COLOR: Toggle bit
+ * 
+ * @return Previous pixel state (bit value)
+ */
 uint8_t CH1115Display::updatePagePixel(uint8_t y, uint8_t colour) {
   if (y >= this->_height) {
     return 0;
@@ -390,6 +482,23 @@ uint8_t CH1115Display::updatePagePixel(uint8_t y, uint8_t colour) {
   return prev;
 }
 
+/**
+ * @brief Update entire column (byte) in current page drawing operation
+ * 
+ * Reads current column byte, applies drawing mode with mask, writes back.
+ * More efficient than pixel-by-pixel updates.
+ * 
+ * Drawing modes:
+ *  - OVERWRITE_MODE: Replace masked bits with pattern
+ *  - OR_MODE: Bitwise OR masked pattern
+ *  - XOR_MODE: Bitwise XOR masked pattern
+ *  - AND_MODE: Bitwise AND with (pattern | ~mask)
+ * 
+ * @param pattern Pixel pattern byte to apply
+ * @param mode Drawing mode (OVERWRITE, OR, XOR, AND)
+ * @param mask Bit mask (0xFF = all bits, 0x0F = lower 4 bits only)
+ * @return Previous column value (masked portion)
+ */
 uint8_t CH1115Display::updatePageColumn(uint8_t pattern, uint8_t mode,
                                         uint8_t mask) {
   // request data
@@ -425,9 +534,13 @@ uint8_t CH1115Display::updatePageColumn(uint8_t pattern, uint8_t mode,
   return prev;
 }
 
-// 28. End: (EEH)
-//   Cancels Read-Modify-Write mode and returns column address to the original
-//   address (when Read-Modify-Write is issued.)
+/**
+ * @brief End page-based pixel drawing sequence
+ * 
+ * Terminates Read-Modify-Write mode (command 0xEE) and restores
+ * column address to value when startPageDrawing() was called.
+ * Per CH1115 Datasheet Section 28.
+ */
 void CH1115Display::endPageDrawing() {
   TinyI2C.restart(CH1115_I2C_ADDRESS, 0);
   // stop read modify write
@@ -436,6 +549,12 @@ void CH1115Display::endPageDrawing() {
   TinyI2C.stop();
 }
 
+/**
+ * @brief Draw a single pixel
+ * 
+ * Sets or clears a single pixel at (x, y) coordinate.
+ * Uses Read-Modify-Write mode for efficient I2C communication.
+ */
 void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
   if ((x >= this->_width) || (y >= this->_height)) {
     return;
@@ -476,6 +595,19 @@ void CH1115Display::drawPixel(uint8_t x, uint8_t y, uint8_t colour) {
   TinyI2C.stop();
 }
 
+/**
+ * @brief Draw a line between two points
+ * 
+ * Implements Bresenham's line algorithm for efficient rasterization.
+ * Detects horizontal, vertical, and diagonal lines for optimization.
+ * 
+ * Algorithm handles two cases:
+ *  1. Steep lines (|dy| > |dx|): Iterates through y, updates x
+ *  2. Shallow lines (|dy| <= |dx|): Iterates through x, updates y
+ * 
+ * For steep lines, uses page-based drawing for efficiency.
+ * For shallow lines, uses per-pixel updates.
+ */
 void CH1115Display::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1,
                              uint8_t color) {
   if (y0 == y1) {
@@ -568,6 +700,12 @@ void CH1115Display::drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1,
   }
 }
 
+/**
+ * @brief Draw horizontal line (internal)
+ * 
+ * Draws a horizontal line from (x0,y) to (x1,y).
+ * Used by drawLine() for horizontal line optimization.
+ */
 void CH1115Display::drawHLine(uint8_t x0, uint8_t x1, uint8_t y,
                               uint8_t color) {
   this->startPageDrawing(x0, y);
@@ -577,6 +715,12 @@ void CH1115Display::drawHLine(uint8_t x0, uint8_t x1, uint8_t y,
   this->endPageDrawing();
 }
 
+/**
+ * @brief Draw vertical line (internal)
+ * 
+ * Draws a vertical line from (x,y0) to (x,y1).
+ * Used by drawLine() for vertical line optimization.
+ */
 void CH1115Display::drawVLine(uint8_t x, uint8_t y0, uint8_t y1,
                               uint8_t color) {
   for (uint8_t y = y0; y <= y1; y++) {
@@ -584,6 +728,12 @@ void CH1115Display::drawVLine(uint8_t x, uint8_t y0, uint8_t y1,
   }
 }
 
+/**
+ * @brief Draw text string using large (2x) font (internal)
+ * 
+ * Renders text at 2x magnification using horizontal scrolling.
+ * Only used internally within CH1115Display implementation.
+ */
 void CH1115Display::drawString2(uint8_t x, uint8_t y, const char *pText) {
   setAddress(x, y);
 
@@ -611,6 +761,18 @@ void CH1115Display::drawString2(uint8_t x, uint8_t y, const char *pText) {
   }
 }
 
+/**
+ * @brief Draw text string using standard font
+ * 
+ * Renders null-terminated string at (x, y) using 5-pixel-wide characters.
+ * Characters are stored in PROGMEM (program memory).
+ * 
+ * @implementation
+ *  - Handles page-crossing for characters spanning multiple pages
+ *  - First part (upper) uses mask from page_offset to 0xFF
+ *  - Second part (lower) uses mask from 0x00 to page_offset
+ *  - Uses updatePageColumn() with OVERWRITE_MODE for clean rendering
+ */
 void CH1115Display::drawString(uint8_t x, uint8_t y, const char *pText) {
   if (y + FONT_CHAR_HEIGHT > this->_height) {
     return;
@@ -678,13 +840,37 @@ void CH1115Display::drawString(uint8_t x, uint8_t y, const char *pText) {
   }
 }
 
+/// @brief Temporary buffer for integer-to-string conversion
 static char numberbuffer[12];
 
+/**
+ * @brief Draw integer number at specified position
+ * 
+ * Converts integer to decimal string and renders using drawString().
+ * Supports full 32-bit signed range (-2147483648 to 2147483647).
+ * 
+ * @implementation Uses stdlib ltoa() for base-10 conversion.
+ */
 void CH1115Display::drawInt(uint8_t x, uint8_t y, int32_t num) {
   ltoa(num, numberbuffer, 10);
   drawString(x, y, numberbuffer);
 }
 
+/**
+ * @brief Draw bitmap sprite at specified position
+ * 
+ * Renders a bitmap image stored in PROGMEM at (x, y).
+ * Supports various drawing modes and handles page crossing.
+ * 
+ * @param sw Sprite width in pixels
+ * @param sh Sprite height in pixels
+ * @param data Pointer to bitmap data in PROGMEM
+ * @param mode Drawing mode (OVERWRITE, OR, XOR, AND)
+ * 
+ * @implementation
+ *  - Sprite data should be width bytes of column-oriented pixel data
+ *  - Handles page-crossing similar to drawString()
+ */
 void CH1115Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh,
                                const uint8_t *data, uint8_t mode) {
   if (y + sh > this->_height) {
@@ -723,6 +909,15 @@ void CH1115Display::drawSprite(uint8_t x, uint8_t y, uint8_t sw, uint8_t sh,
   }
 }
 
+/**
+ * @brief Send command byte to display controller via I2C
+ * 
+ * Formats and transmits a single command. I2C format:
+ *  - Control byte: 0x00 (command mode)
+ *  - Command byte: parameter
+ * 
+ * @implementation Performs complete I2C transaction (start/write/stop)
+ */
 void CH1115Display::send_command(uint8_t command) {
   TinyI2C.start(CH1115_I2C_ADDRESS, 0);
   TinyI2C.write(0x00);
@@ -730,6 +925,15 @@ void CH1115Display::send_command(uint8_t command) {
   TinyI2C.stop();
 }
 
+/**
+ * @brief Send single data byte to display RAM via I2C
+ * 
+ * Transmits one byte of pixel data. I2C format:
+ *  - Control byte: 0x40 (data mode)
+ *  - Data byte: pixel pattern
+ * 
+ * @implementation Performs complete I2C transaction (start/write/stop)
+ */
 void CH1115Display::send_data(uint8_t byte) {
   TinyI2C.start(CH1115_I2C_ADDRESS, 0);
   TinyI2C.write(0x40);
@@ -737,17 +941,45 @@ void CH1115Display::send_data(uint8_t byte) {
   TinyI2C.stop();
 }
 
+/**
+ * @brief Initiate data transfer sequence
+ * 
+ * Starts I2C transaction and sends first data byte.
+ * Must be followed by add_data() and stop_data() calls.
+ * I2C format:
+ *  - Control byte: 0xC0 (data mode, more data coming)
+ *  - First data byte
+ */
 void CH1115Display::start_data(uint8_t byte) {
   TinyI2C.start(CH1115_I2C_ADDRESS, 0);
   TinyI2C.write(0xC0);
   TinyI2C.write(byte);
 }
 
+/**
+ * @brief Add data byte to ongoing transfer
+ * 
+ * Appends another byte to active I2C data transfer.
+ * Must be called between start_data() and stop_data().
+ * I2C format:
+ *  - Control byte: 0xC0 (data mode, more data coming)
+ *  - Data byte
+ */
 void CH1115Display::add_data(uint8_t byte) {
   TinyI2C.write(0xC0);
   TinyI2C.write(byte);
 }
 
+/**
+ * @brief End data transfer sequence
+ * 
+ * Terminates data transfer and sends final byte.
+ * Should follow start_data() and any add_data() calls.
+ * Performs full I2C transaction (start/write/stop).
+ * I2C format:
+ *  - Control byte: 0x40 (data mode, last byte)
+ *  - Final data byte
+ */
 void CH1115Display::stop_data(uint8_t byte) {
   TinyI2C.start(CH1115_I2C_ADDRESS, 0);
   TinyI2C.write(0x40);
