@@ -14,15 +14,15 @@ const uint8_t RADIO_CE_PIN = 1;
 const uint8_t RADIO_CS_PIN = 2;
 
 SPIManager spi;
-NRF24Manager radio(NRF24_DYNAMIC_PAYLOAD_SIZE);
+NRF24Manager radio(-1);
 
-char ackBuffer[32] = "UNO ACK";
-char sendBuffer[32] = "UNO";
-int32_t counter = 0;
+char ackBuffer[32] = "UNO INIT";
 
 void setup() {
     // init serial com
     USART_Init(BAUD_RATE_115200, SerialCommandMgr::serialInput);
+
+    USART_WriteString("Arduino UNO\n");
 
     USART_WriteString("Init SPI\n");
     // init SPI bus to control NRF24
@@ -39,7 +39,7 @@ void setup() {
     USART_WriteString("UNO Ready\n");
     _delay_ms(100);
 
-    //radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
+    radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
     radio.info();
 }
 
@@ -53,13 +53,92 @@ void execCommand(const char* cmd) {
     if (strcmp(cmd, "status") == 0) {
         radio.summary();
     } else if (strcmp(cmd, "info") == 0) {
-        // radio.setDynamicPayload();
         radio.info();
+     } else if (strcmp(cmd, "init") == 0) {
+        radio.setDestinationAddress("atn84");
+        radio.setMyAddress("amg32");
+        radio.init(&spi, RADIO_CE_PIN, RADIO_CS_PIN);
+    } else if (strcmp(cmd, "activate") == 0) {
+        radio.activate();
+    } else {
+        memset(ackBuffer, 0, sizeof(ackBuffer));
+        strcat(ackBuffer, cmd);
+        
+        radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
     }
 }
 
 uint32_t previousSendCounter = 0;
-const int32_t send_interval = 5000;
+
+uint32_t lastWatchdogMessageTime = 0;
+
+void decodeRemoteProtocolJoystick(const char* msg) {
+    if (msg[2] == 'J' && strlen(msg) == 8) {
+        uint8_t x = msg[3];
+        uint8_t y = msg[4];
+        char z = msg[5];
+        char c = msg[6];
+        uint8_t s = msg[7];
+        memset(ackBuffer, 0, sizeof(ackBuffer));
+
+        itoa(x, ackBuffer, 10);
+        
+        strcat(ackBuffer + strlen(ackBuffer), ",");
+        itoa(y, ackBuffer + strlen(ackBuffer), 10);
+        strcat(ackBuffer + strlen(ackBuffer), ",");
+        itoa(s, ackBuffer + strlen(ackBuffer), 10);
+
+        strcat(ackBuffer + strlen(ackBuffer), " ");
+        if (z == 'Z') {
+            strcat(ackBuffer + strlen(ackBuffer), " Z");
+        } else {
+            strcat(ackBuffer + strlen(ackBuffer), " ");
+        }
+        if (c == 'C') {
+            strcat(ackBuffer + strlen(ackBuffer), "C");
+        }
+
+        USART_WriteString("   ack buf: ");
+            USART_WriteString(ackBuffer);
+            USART_WriteString("\n");
+        radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
+    
+    } else {
+        USART_WriteString("Unknown J format: ");
+        USART_WriteString(msg);
+        USART_WriteString("\n");
+        memset(ackBuffer, 0, sizeof(ackBuffer));
+        strcat(ackBuffer, "ERR: bad J format");
+        radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
+    }
+}
+
+void decodeRemoteProtocolV1(const char* msg) {
+    if (msg[2] == 'J') {
+        decodeRemoteProtocolJoystick(msg);
+    } else if (msg[2] == 'W' ) {
+        // watchdog
+        lastWatchdogMessageTime = milliseconds();
+    } else {
+        USART_WriteString("Unknown msg type.");
+        USART_WriteString(msg);
+        USART_WriteString("\n");
+        memset(ackBuffer, 0, sizeof(ackBuffer));
+        strcat(ackBuffer, "ERR: bad msg");
+        radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
+    }
+}
+
+void decodeRemoteProtocol(const char* msg) {
+    if (msg[1] == '1') {
+        decodeRemoteProtocolV1(msg);
+    } else {
+        USART_WriteString("Unknown REMOTE version.");
+        memset(ackBuffer, 0, sizeof(ackBuffer));
+        strcat(ackBuffer, "ERR: bad vers");
+        radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
+    }
+}
 
 void loop() {
     uint32_t now = milliseconds();
@@ -78,40 +157,20 @@ void loop() {
             USART_WriteString("Received: ");
             USART_WriteString(msg);
             USART_WriteString("\n");
-        }
 
-        counter++;
-        memset(ackBuffer, 0, sizeof(ackBuffer));
-        strcat(ackBuffer, "UNO ACK: ");
-        itoa(counter, ackBuffer + strlen(ackBuffer), 10);
-        radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
+            // check protocol
+            if (msg[0] == 'R' && strlen(msg) >= 3) {
+                decodeRemoteProtocol(msg);
+            } else {
+                USART_WriteString("Unknown protocol.");
+                memset(ackBuffer, 0, sizeof(ackBuffer));
+                strcat(ackBuffer, "ERR: bad prtl");
+                radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
+            }
+
+        }
     }
 
-    //if (now - previousSendCounter >= send_interval) {
-    //    // save the last time
-    //    previousSendCounter = now;
-    //    counter++;
-    //    memset(sendBuffer, 0, sizeof(sendBuffer));
-    //    strcat(sendBuffer, "UNO: ");
-    //    itoa(counter, sendBuffer + strlen(sendBuffer), 10);
-    //    USART_WriteString("now ");
-    //    USART_WriteUInt(now / 1000);
-    //    USART_WriteString("s: Send: ");
-    //    USART_WriteString(sendBuffer);
-    //    
-    //    uint8_t length = strlen(sendBuffer);
-    //    uint8_t* response = radio.send_binary((uint8_t*)sendBuffer, length);
-    //    if (length == 33) {
-    //        USART_WriteString(" => Send failed.");
-    //    } else if (response) {
-    //        response[length] = '\0'; // Ensure null-termination
-    //        USART_WriteString(" => Received response: ");
-    //        USART_WriteString((char*)response);
-    //    } else {
-    //        USART_WriteString(" => Acked.");
-    //    }
-    //    USART_WriteString("\n");
-    //}
-}//
+}
 
 #include <main.cpp.h>
