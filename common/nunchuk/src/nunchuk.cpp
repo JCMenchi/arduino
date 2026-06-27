@@ -465,54 +465,9 @@ void Nunchuk::display_calibration() {
   INT0_WriteUInt(_jy_max);
   INT0_WriteString("\n");
 
-  INT0_WriteString("  Acc 0G ");
-  INT0_WriteUInt(_ax_0g);
-  INT0_WriteString(" ");
-  INT0_WriteUInt(_ay_0g);
-  INT0_WriteString(" ");
-  INT0_WriteUInt(_az_0g);
-  INT0_WriteString("\n");
-
-  INT0_WriteString("  Acc 1G ");
-  INT0_WriteUInt(_ax_1g);
-  INT0_WriteString(" ");
-  INT0_WriteUInt(_ay_1g);
-  INT0_WriteString(" ");
-  INT0_WriteUInt(_az_1g);
-  INT0_WriteString("\n");
-
-  float ming = -1.0f * (float)_ax_0g * _ax_res;
-  float maxg = (1024.0f - _ax_0g) * _ax_res;
-
-  INT0_WriteString("  AccX min=");
-  INT0_WriteFloat(ming, 4, 1);
-  INT0_WriteString(" max=");
-  INT0_WriteFloat(maxg, 4, 1);
-  INT0_WriteString(" res=");
-  INT0_WriteFloat(_ax_res, 6, 3);
-  INT0_WriteString("\n");
-
-  ming = -1.0f * (float)_ay_0g * _ay_res;
-  maxg = (1024.0f - _ay_0g) * _ay_res;
-
-  INT0_WriteString("  AccY min=");
-  INT0_WriteFloat(ming, 4, 1);
-  INT0_WriteString(" max=");
-  INT0_WriteFloat(maxg, 4, 1);
-  INT0_WriteString(" res=");
-  INT0_WriteFloat(_ay_res, 6, 3);
-  INT0_WriteString("\n");
-
-  ming = -1.0f * (float)_az_0g * _az_res;
-  maxg = (1024.0f - _az_0g) * _az_res;
-
-  INT0_WriteString("  AccZ min=");
-  INT0_WriteFloat(ming, 4, 1);
-  INT0_WriteString(" max=");
-  INT0_WriteFloat(maxg, 4, 1);
-  INT0_WriteString(" res=");
-  INT0_WriteFloat(_az_res, 6, 3);
-  INT0_WriteString("\n");
+  // do not show accelerometer calibration on INT0 serial, to save time and space
+  // use of INT0 as serial means that we are on a resource-constrained device, so we prioritize joystick calibration output
+  
   #endif
 }
 

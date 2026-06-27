@@ -345,7 +345,7 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
 
   // ===== Automatic Retransmission Setup =====
   // ARD (Auto Retransmit Delay) and ARC (Auto Retransmit Count)
-  cmd = 0x41; // ARD=0011 (ARD*250µs delay), ARC=0001 (1 retry attempt)
+  cmd = 0x88; // ARD=0011 (ARD*250µs delay), ARC=0001 (1 retry attempt)
   this->writeRegister(SETUP_RETR_REG, &cmd, 1);
   _delay_ms(2);
 
@@ -358,7 +358,7 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
 
   // ===== RF Setup (Data Rate and TX Power) =====
   // Default configuration for 1 Mbps (00) (01 for 2 Mbps, 10 for 250 kbps)
-  cmd = (0 << RF_SETUP_REG_RF_DR_LOW) | (1 << RF_SETUP_REG_RF_DR_HIGH) | RF_SETUP_REG_RF_PWR_0dBm;
+  cmd = (0 << RF_SETUP_REG_RF_DR_LOW) | (1 << RF_SETUP_REG_RF_DR_HIGH) | RF_SETUP_REG_RF_PWR_18dBm;
   this->writeRegister(RF_SETUP_REG, &cmd, 1);
   _delay_ms(2);
 
@@ -397,6 +397,24 @@ void NRF24Manager::init(SPIManager *s, uint8_t ce_pin, uint8_t cs_pin) {
     cmd = (1 << DYNPD_REG_DPL_P0) | (1 << DYNPD_REG_DPL_P1);
     this->writeRegister(DYNPD_REG, &cmd, 1);
     _delay_ms(2);
+
+    // read back FEATURE register to verify DPL is enabled
+    uint8_t feature;
+    this->readRegister(FEATURE_REG, &feature, 1);
+    if ((feature & (1 << FEATURE_REG_EN_DPL)) == 0) {
+      // If DPL is not enabled, send ACTIVATE command to enable it
+      // ACTIVATE is a toggle, so we send it once to enable, then re-enable DPL
+      this->activate();
+      // Re-enable DPL after activation
+      cmd = (1 << FEATURE_REG_EN_DPL | 1 << FEATURE_REG_EN_ACK_PAY);
+      this->writeRegister(FEATURE_REG, &cmd, 1);
+      _delay_ms(2);
+
+      cmd = (1 << DYNPD_REG_DPL_P0) | (1 << DYNPD_REG_DPL_P1);
+      this->writeRegister(DYNPD_REG, &cmd, 1);
+      _delay_ms(2);
+    }
+
   } else {
     // set size
     cmd = this->_payloadSize;
@@ -487,6 +505,38 @@ void NRF24Manager::flushTX() {
   this->send_spi(NRF24CMD_FLUSH_TX, 0, 0);
 }
 
+/*
+  * @brief Activate/Deactivate ACK payload feature
+  * 
+  * Some NRF24 modules require sending the ACTIVATE command with 0x73 to enable
+  * the ACK payload feature. Sending it again will deactivate the feature.
+  * This is a workaround for modules that have this feature disabled by default.
+  * 
+  * Datasheet reference:
+  *  "This write command followed by data 0x73 acti-
+      vates the following features:
+      • R_RX_PL_WID
+      • W_ACK_PAYLOAD
+      • W_TX_PAYLOAD_NOACK
+      A new ACTIVATE command with the same data
+      deactivates them again. This is executable in
+      power down or stand by modes only.
+      The R_RX_PL_WID, W_ACK_PAYLOAD, and
+      W_TX_PAYLOAD_NOACK features registers are
+      initially in a deactivated state; a write has no
+      effect, a read only results in zeros on MISO. To
+      activate these registers, use the ACTIVATE com-
+      mand followed by data 0x73. Then they can be
+      accessed as any other register in nRF24L01. Use
+      the same command and data to deactivate the
+      registers again."
+
+*/
+void NRF24Manager::activate() {
+  uint8_t cmd = 0x73; // Activation code for enabling features on some modules
+  this->send_spi(NRF24CMD_ACTIVATE, &cmd, 1);
+}
+
 /**
  * @brief Change the module operating state (RX/TX mode)
  * 
@@ -526,6 +576,7 @@ void NRF24Manager::changeState(uint8_t state) {
     if (!(config_register & (1 << CONFIG_REG_PRIM_RX))) {
       return; // Already in transmit mode
     }
+    this->flushTX(); // Clear TX FIFO before switching to transmit mode
     this->celow();  // Ensure CE is LOW for transmit mode
     // Set PRIM_RX=0 for transmit mode
     data = config_register & ~(1 << CONFIG_REG_PRIM_RX);
@@ -884,29 +935,29 @@ void NRF24Manager::info() {
   uint8_t buffer[5];
   this->summary();
 
-  this->readRegister(RX_ADDR_P0_REG, buffer, 5);
-  INT0_WritePString(PSTR("   RX_ADDR_P0: "));
-  for (uint8_t i = 0; i < 5; i++) {
-    INT0_WriteChar(buffer[i]);
-  }
-  INT0_WritePString(PSTR("\n"));
+  //this->readRegister(RX_ADDR_P0_REG, buffer, 5);
+  //INT0_WritePString(PSTR("   RX_ADDR_P0: "));
+  //for (uint8_t i = 0; i < 5; i++) {
+  //  INT0_WriteChar(buffer[i]);
+  //}
+  //INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(RX_PW_P0_REG, buffer, 1);
-  INT0_WritePString(PSTR("     RX_PW_P0: "));
-  INT0_WriteUInt(buffer[0]);
-  INT0_WritePString(PSTR("\n"));
-
+  // this->readRegister(RX_PW_P0_REG, buffer, 1);
+  // INT0_WritePString(PSTR("     RX_PW_P0: "));
+  // INT0_WriteUInt(buffer[0]);
+  // INT0_WritePString(PSTR("\n"));
+// 
   this->readRegister(RX_ADDR_P1_REG, buffer, 5);
   INT0_WritePString(PSTR("   RX_ADDR_P1: "));
   for (uint8_t i = 0; i < 5; i++) {
-    INT0_WriteChar(buffer[i]);
+     INT0_WriteChar(buffer[i]);
   }
   INT0_WritePString(PSTR("\n"));
-    this->readRegister(RX_PW_P1_REG, buffer, 1);
-  INT0_WritePString(PSTR("     RX_PW_P1: "));
-  INT0_WriteUInt(buffer[0]);
-  INT0_WritePString(PSTR("\n"));
-
+  //   this->readRegister(RX_PW_P1_REG, buffer, 1);
+  // INT0_WritePString(PSTR("     RX_PW_P1: "));
+  // INT0_WriteUInt(buffer[0]);
+  // INT0_WritePString(PSTR("\n"));
+// 
   this->readRegister(TX_ADDR_REG, buffer, 5);
   INT0_WritePString(PSTR("      TX_ADDR: "));
   for (uint8_t i = 0; i < 5; i++) {
@@ -914,11 +965,11 @@ void NRF24Manager::info() {
   }
   INT0_WritePString(PSTR("\n"));
   
-  uint8_t l = 0; // Default to 0 if read fails
-  this->send_spi(NRF24CMD_R_RX_PL_WID, &l, 1);
-  INT0_WritePString(PSTR("     R_RX_PL_WID: "));
-  INT0_WriteUInt(l);
-  INT0_WritePString(PSTR("\n"));
+  //uint8_t l = 0; // Default to 0 if read fails
+  //this->send_spi(NRF24CMD_R_RX_PL_WID, &l, 1);
+  //INT0_WritePString(PSTR("     R_RX_PL_WID: "));
+  //INT0_WriteUInt(l);
+  //INT0_WritePString(PSTR("\n"));
 }
 
 /**
@@ -942,25 +993,25 @@ void NRF24Manager::summary() {
   INT0_WriteUInt(buffer[0], 2);
   INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(STATUS_REG, buffer, 1);
-  INT0_WritePString(PSTR("       STATUS: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
+  //this->readRegister(STATUS_REG, buffer, 1);
+  //INT0_WritePString(PSTR("       STATUS: "));
+  //INT0_WriteUInt(buffer[0], 2);
+  //INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(OBSERVE_TX_REG, buffer, 1);
-  INT0_WritePString(PSTR("   OBSERVE_TX: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
+  //this->readRegister(OBSERVE_TX_REG, buffer, 1);
+  //INT0_WritePString(PSTR("   OBSERVE_TX: "));
+  //INT0_WriteUInt(buffer[0], 2);
+  //INT0_WritePString(PSTR("\n"));
+//
+  //this->readRegister(RPD_REG, buffer, 1);
+  //INT0_WritePString(PSTR("          RPD: "));
+  //INT0_WriteUInt(buffer[0], 2);
+  //INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(RPD_REG, buffer, 1);
-  INT0_WritePString(PSTR("          RPD: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(FIFO_STATUS_REG, buffer, 1);
-  INT0_WritePString(PSTR("  FIFO_STATUS: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
+  //this->readRegister(FIFO_STATUS_REG, buffer, 1);
+  //INT0_WritePString(PSTR("  FIFO_STATUS: "));
+  //INT0_WriteUInt(buffer[0], 2);
+  //INT0_WritePString(PSTR("\n"));
 
   this->readRegister(DYNPD_REG, buffer, 1);
   INT0_WritePString(PSTR("        DYNPD: "));
@@ -972,25 +1023,25 @@ void NRF24Manager::summary() {
   INT0_WriteUInt(buffer[0], 2);
   INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(EN_AA_REG, buffer, 1);
-  INT0_WritePString(PSTR("        EN_AA: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
+  // this->readRegister(EN_AA_REG, buffer, 1);
+  // INT0_WritePString(PSTR("        EN_AA: "));
+  // INT0_WriteUInt(buffer[0], 2);
+  // INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(EN_RXADDR_REG, buffer, 1);
-  INT0_WritePString(PSTR("    EN_RXADDR: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
+  //this->readRegister(EN_RXADDR_REG, buffer, 1);
+  //INT0_WritePString(PSTR("    EN_RXADDR: "));
+  //INT0_WriteUInt(buffer[0], 2);
+  //INT0_WritePString(PSTR("\n"));
 
-  this->readRegister(SETUP_AW_REG, buffer, 1);
-  INT0_WritePString(PSTR("     SETUP_AW: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
-
-  this->readRegister(SETUP_RETR_REG, buffer, 1);
-  INT0_WritePString(PSTR("   SETUP_RETR: "));
-  INT0_WriteUInt(buffer[0], 2);
-  INT0_WritePString(PSTR("\n"));
+  //this->readRegister(SETUP_AW_REG, buffer, 1);
+  //INT0_WritePString(PSTR("     SETUP_AW: "));
+  //INT0_WriteUInt(buffer[0], 2);
+  //INT0_WritePString(PSTR("\n"));
+//
+  //this->readRegister(SETUP_RETR_REG, buffer, 1);
+  //INT0_WritePString(PSTR("   SETUP_RETR: "));
+  //INT0_WriteUInt(buffer[0], 2);
+  //INT0_WritePString(PSTR("\n"));
 
   this->readRegister(RF_CH_REG, buffer, 1);
   INT0_WritePString(PSTR("        RF_CH: "));

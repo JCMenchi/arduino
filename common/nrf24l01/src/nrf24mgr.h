@@ -306,7 +306,15 @@ public:
    */
   bool isDynamicPayload() const { return (this->_payloadSize == -1); }
 
-  
+  /**
+   * @brief Activate/Deactivate ACK payload from datasheet V1
+   * 
+   * This may be needed on some module to activate the ACK payload feature. It sends the ACTIVATE command with 0x73 to the module.
+   * Sending the activate call a second time will deactivate the feature. This is a workaround for some modules that have the feature disabled by default.
+   * 
+   */
+  void activate();
+
 private:
   /**
    * @brief Change the module operating state (RX/TX mode)

@@ -63,8 +63,8 @@ TinyI2CMaster::TinyI2CMaster() : I2Ccount(0), initialised(false) {}
 #endif
 
 
-#define DELAY_I2C (_delay_loop_1(3))
-#define PULSE_CLOCK (_delay_loop_1(3))
+#define DELAY_I2C (_delay_us(10))
+#define PULSE_CLOCK (_delay_us(5))
 
 #define SDA_HIGH GPIO_INPUT(I2C_PORT, I2C_SDA_PIN)
 
@@ -133,6 +133,7 @@ void TinyI2CMaster::stop(void) {
   SCL_HIGH;
   PULSE_CLOCK;
   SDA_HIGH;
+  DELAY_I2C;
 }
 
 bool TinyI2CMaster::write(uint8_t data) {
