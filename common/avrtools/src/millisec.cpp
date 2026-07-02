@@ -82,9 +82,9 @@ void init_timer() {
 #elif defined(__AVR_ATtiny84__)
   TCCR0A |= (1 << COM0A1) | (1 << WGM01);
 
-  // Prescaler 64: tick = 4µs, OCR0A=250 gives 1000µs = 1ms
+  // Prescaler 64: tick = 8µs, OCR0=125 gives 1000µs = 1ms
   TCCR0B |= (1 << CS01) | (1 << CS00);
-  OCR0A = 250;
+  OCR0A = 125;
 
   // Enable compare match interrupt
   TIMSK0 |= (1 << OCIE0A);

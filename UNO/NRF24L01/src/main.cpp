@@ -140,6 +140,51 @@ void decodeRemoteProtocol(const char* msg) {
     }
 }
 
+
+
+// Message format used to send sensor data over the nRF24L01 radio.
+// The payload is kept compact to fit dynamic payload sizes.
+struct RadioMessage {
+    char protocol;     // Protocol identifier, e.g., 'W' for weather station
+    char version;      // Protocol version, e.g., '1'
+    char type;         // Message type, e.g., 'T' for temperature
+    uint32_t timecode; // time
+    int16_t temp;      // Temperature value in tenths of degrees Celsius
+    int8_t humidity;   // Humidity value in percentage
+    int16_t pressure;  // Pressure value in hPa (hectopascals)
+};
+
+// Send the latest temperature and humidity values over the nRF24L01 link.
+void decodeWeatherStationProtocol(const char* msg) {
+    RadioMessage rmsg;
+    memcpy(&rmsg, msg, sizeof(RadioMessage));
+
+    if (rmsg.protocol != 'W' || rmsg.version != '1') {
+        USART_WriteString("Invalid weather station protocol version.\n");
+        return;
+    }
+
+    if (rmsg.type != 'T') {
+        USART_WriteString("Invalid weather station message type.\n");
+        return;
+    }
+
+    USART_WriteString("Weather Station Data: ");
+    USART_WriteString("Timecode: ");
+    USART_WriteUInt(rmsg.timecode/1000);
+    USART_WriteString(" s, ");
+    USART_WriteString("Temp: ");
+    USART_WriteUInt(rmsg.temp / 10);
+    USART_WriteString(".");
+    USART_WriteUInt(rmsg.temp % 10);
+    USART_WriteString("C, Humidity: ");
+    USART_WriteUInt(rmsg.humidity);
+    USART_WriteString("%, Pressure: ");
+    USART_WriteUInt(rmsg.pressure);
+    USART_WriteString("hPa\n");
+}
+
+
 void loop() {
     uint32_t now = milliseconds();
     if (SerialCommandMgr::hasCommand()) {
@@ -161,6 +206,10 @@ void loop() {
             // check protocol
             if (msg[0] == 'R' && strlen(msg) >= 3) {
                 decodeRemoteProtocol(msg);
+            } else if (msg[0] == 'W') {
+                // weather station protocol
+                // decode message
+                decodeWeatherStationProtocol(msg);
             } else {
                 USART_WriteString("Unknown protocol.");
                 memset(ackBuffer, 0, sizeof(ackBuffer));

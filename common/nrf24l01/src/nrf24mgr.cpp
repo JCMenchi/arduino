@@ -726,7 +726,6 @@ uint8_t NRF24Manager::send_binary(uint8_t *msg, uint8_t length) {
   // Transmit mode: CE low, enter TX mode
   this->celow();  // Stop any RX activity
   this->changeState(NRF24_TRANSMIT);
-  uint8_t* result = NULL;
 
   // clear status flags to ensure clean state before transmission
   uint8_t cmd = (1 << STATUS_REG_RX_DR) | (1 << STATUS_REG_TX_DS) |
