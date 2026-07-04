@@ -101,4 +101,7 @@
  */
 #define GPIO_IS_HIGH(PORTID, BITNUM) (CONCAT(PIN, PORTID) & (1 << BITNUM))?true:false
 
+
+uint16_t readADC(uint8_t channel);
+
 #endif
