@@ -367,7 +367,7 @@ void CH1115Display::drawScreen(uint8_t pattern, bool border) {
         TinyI2C.write(0xFF);
       } else if (border && page == 0) {
         TinyI2C.write(pattern | 0x01);
-      } else if (border && page == 7) {
+      } else if (border && page == (_height / 8 - 1)) {
         TinyI2C.write(pattern | 0x80);
       } else {
         TinyI2C.write(pattern);

@@ -1038,7 +1038,7 @@ uint8_t SSD1306Display::drawChar(uint8_t x, uint8_t y, char c) {
  * @see drawPString() for strings in PROGMEM
  * @see drawString2() for large (2x) font rendering
  */
-uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
+uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText, bool inverseVideo) {
   if (y + FONT_CHAR_HEIGHT > this->_height) {
     return x;
   }
@@ -1057,6 +1057,9 @@ uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
     char c = pText[0];
 
     uint8_t line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH));
+    if (inverseVideo) {
+      line = line ^ 0xFF;
+    }
     if (page_offset) {
       line = (line << page_offset);
     }
@@ -1064,6 +1067,9 @@ uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
 
     for (int8_t i = 1; i < FONT_CHAR_WIDTH; i++) {
       line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH) + i);
+      if (inverseVideo) {
+        line = line ^ 0xFF;
+      }
       if (page_offset) {
         line = (line << page_offset);
       }
@@ -1071,7 +1077,7 @@ uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
     }
 
     // draw empty vert line to separate char
-    this->updatePageColumn(0x00, 0, mask);
+    this->updatePageColumn(inverseVideo ? 0xFF : 0x00, 0, mask);
 
     pText++;
   }
@@ -1088,17 +1094,23 @@ uint8_t SSD1306Display::drawString(uint8_t x, uint8_t y, const char *pText) {
       char c = startText[0];
 
       uint8_t line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH));
+      if (inverseVideo) {
+        line = line ^ 0xFF;
+      }
       line = (line >> (8 - page_offset));
       this->updatePageColumn(line, 0, mask);
 
       for (int8_t i = 1; i < FONT_CHAR_WIDTH; i++) {
         line = pgm_read_byte(small_font + ((c - 32) * FONT_CHAR_WIDTH) + i);
+        if (inverseVideo) {
+          line = line ^ 0xFF;
+        }
         line = (line >> (8 - page_offset));
         this->updatePageColumn(line, 0, mask);
       }
 
       // draw empty vert line to separate char
-      this->updatePageColumn(0x00, 0, mask);
+      this->updatePageColumn(inverseVideo ? 0xFF : 0x00, 0, mask);
 
       startText++;
     }

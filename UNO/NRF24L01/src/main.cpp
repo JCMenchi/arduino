@@ -10,15 +10,45 @@
 #include "tinyspi.h"
 #include "usart_serial.h"
 
+#include "SH1107Display.h" 
+
 const uint8_t RADIO_CE_PIN = 1;
 const uint8_t RADIO_CS_PIN = 2;
 
 SPIManager spi;
 NRF24Manager radio(-1);
+SH1107Display display(128, 128);
 
 char ackBuffer[32] = "UNO INIT";
 
+const uint8_t JOYSTICK_VRX = 0;
+const uint8_t JOYSTICK_VRY = 1;
+const uint8_t JOYSTICK_SW = 2;
+
+void setupJoystick() {
+    // configure joystick pins as input
+    GPIO_INPUT(C, JOYSTICK_VRX);  // VRX
+    GPIO_INPUT(C, JOYSTICK_VRY);  // VRY
+    GPIO_INPUT(C, JOYSTICK_SW);  // SW
+}
+
+void readJoystick() {
+    // read joystick analog values
+    uint16_t xvalue = readADC(JOYSTICK_VRX);
+    uint16_t yvalue = readADC(JOYSTICK_VRY);
+    uint16_t sw = readADC(JOYSTICK_SW);
+
+    USART_WriteString("Joystick: X=");
+    USART_WriteUInt(xvalue);
+    USART_WriteString(", Y=");
+    USART_WriteUInt(yvalue);
+    USART_WriteString(", SW=");
+    USART_WriteUInt(sw);
+    USART_WriteString("\n");
+}
+
 void setup() {
+    //setupJoystick();
     // init serial com
     USART_Init(BAUD_RATE_115200, SerialCommandMgr::serialInput);
 
@@ -41,6 +71,10 @@ void setup() {
 
     radio.set_ack_buffer((uint8_t*)ackBuffer, strlen(ackBuffer));
     radio.info();
+
+    display.init(60);
+    display.drawScreen(0x00, true);
+    display.drawString(10, 3, "UNO Ready");
 }
 
 void execCommand(const char* cmd) {
@@ -182,6 +216,50 @@ void decodeWeatherStationProtocol(const char* msg) {
     USART_WriteString("%, Pressure: ");
     USART_WriteUInt(rmsg.pressure);
     USART_WriteString("hPa\n");
+
+    char linebuffer[20];
+    memset(linebuffer, 0, sizeof(linebuffer));
+    itoa(rmsg.temp / 10, linebuffer, 10);
+    strcat(linebuffer, ".");
+    itoa(rmsg.temp % 10, linebuffer + strlen(linebuffer), 10);
+    strcat(linebuffer, " C");
+    display.drawString(3, 16, linebuffer);
+
+    memset(linebuffer, 0, sizeof(linebuffer));
+    itoa(rmsg.humidity, linebuffer, 10);
+    strcat(linebuffer, " %");
+    display.drawString(3, 28, linebuffer);
+
+    memset(linebuffer, 0, sizeof(linebuffer));
+    itoa(rmsg.pressure, linebuffer, 10);
+    strcat(linebuffer, " hPa");
+    display.drawString(3, 40, linebuffer);
+
+    // display the timecode in seconds
+    memset(linebuffer, 0, sizeof(linebuffer));
+
+    int sec = rmsg.timecode / 1000;
+    int min = sec / 60;
+    sec = sec % 60;
+    int hour = min / 60;
+    min = min % 60;
+    
+    if (hour < 10) {
+        strcat(linebuffer, "0");
+    }
+    itoa(hour, linebuffer + strlen(linebuffer), 10);
+    strcat(linebuffer, "h ");
+    if (min < 10) {
+        strcat(linebuffer, "0");
+    }
+    itoa(min, linebuffer + strlen(linebuffer), 10);
+    strcat(linebuffer, "m ");
+    if (sec < 10) {
+        strcat(linebuffer, "0");
+    }
+    itoa(sec, linebuffer + strlen(linebuffer), 10);
+    strcat(linebuffer, "s");
+    display.drawString(10, 56, linebuffer);
 }
 
 
@@ -219,6 +297,33 @@ void loop() {
 
         }
     }
+
+    char linebuffer[20];
+    memset(linebuffer, 0, sizeof(linebuffer));
+    int sec = now / 1000;
+    int min = sec / 60;
+    sec = sec % 60;
+    int hour = min / 60;
+    min = min % 60;
+    
+    if (hour < 10) {
+        strcat(linebuffer, "0");
+    }
+    itoa(hour, linebuffer + strlen(linebuffer), 10);
+    strcat(linebuffer, "h ");
+    if (min < 10) {
+        strcat(linebuffer, "0");
+    }
+    itoa(min, linebuffer + strlen(linebuffer), 10);
+    strcat(linebuffer, "m ");
+    if (sec < 10) {
+        strcat(linebuffer, "0");
+    }
+    itoa(sec, linebuffer + strlen(linebuffer), 10);
+    strcat(linebuffer, "s");
+    display.drawString(55, 118, linebuffer);
+    //readJoystick();
+    _delay_ms(100);
 
 }
 

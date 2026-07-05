@@ -5,7 +5,8 @@
 1. [Introduction](#introduction)
 2. [Supported Displays](#supported-displays)
 3. [CH1115 vs SSD1306 Comparison](#ch1115-vs-ssd1306-comparison)
-4. [Hardware Requirements](#hardware-requirements)
+4. [CH1115 vs SH1107 Comparison](#ch1115-vs-sh1107-comparison)
+5. [Hardware Requirements](#hardware-requirements)
 5. [Getting Started](#getting-started)
 6. [Basic Initialization](#basic-initialization)
 7. [API Reference](#api-reference)
@@ -20,11 +21,11 @@
 
 ## Introduction
 
-This library provides a unified interface for controlling OLED displays using I2C communication. It supports two popular display types: **CH1115** and **SSD1306**, making it flexible for various embedded projects. The library is optimized for AVR microcontrollers and includes support for drawing primitives, text rendering, sprites, and advanced display effects.
+This library provides a unified interface for controlling OLED displays using I2C communication. It supports three popular display types: **CH1115**, **SSD1306**, and **SH1107**, making it flexible for various embedded projects. The library is optimized for AVR microcontrollers and includes support for drawing primitives, text rendering, sprites, and advanced display effects.
 
 ### Features
 
-- Support for CH1115 and SSD1306 OLED displays
+- Support for CH1115, SSD1306, and SH1107 OLED displays
 - I2C communication interface
 - Drawing primitives (pixels, lines, sprites)
 - Text rendering with bitmap fonts
@@ -87,7 +88,7 @@ See [CH1115_vs_SSD1306.md](./CH1115_vs_SSD1306.md) for a detailed comparison of 
 ### Minimum Requirements
 
 - AVR Microcontroller (e.g., ATmega1284p) with I2C (TWI) support
-- OLED Display Module (CH1115 or SSD1306)
+- OLED Display Module (CH1115, SSD1306, or SH1107)
 - I2C pull-up resistors (typically 4.7kΩ) on SDA and SCL lines
 - Power supply for display (3.3V or 5V depending on module)
 
@@ -111,15 +112,19 @@ SCL (I2C)          →    SCL
 #include "CH1115Display.h"  // For CH1115 displays
 // OR
 #include "SSD1306Display.h" // For SSD1306 displays
+// OR
+#include "SH1107Display.h"  // For SH1107 displays
 ```
 
 ### Step 2: Create Display Object
 
 ```cpp
-// For a 128x64 display
+// For a 128x64 display (CH1115)
 CH1115Display display(128, 64);
-// OR
-SSD1306Display display(128, 64);
+// OR for a 128x32 display (SSD1306)
+SSD1306Display display(128, 32);
+// OR for a 128x128 display (SH1107)
+SH1107Display display(128, 128);
 ```
 
 ### Step 3: Initialize the Display
@@ -139,6 +144,7 @@ display.init(0x9F);          // Initialize with custom contrast
 ```cpp
 CH1115Display(uint8_t width, uint8_t height);
 SSD1306Display(uint8_t width, uint8_t height);
+SH1107Display(uint8_t width, uint8_t height);
 ```
 
 Creates a display object with the specified dimensions.

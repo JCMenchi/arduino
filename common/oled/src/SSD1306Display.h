@@ -286,7 +286,7 @@ public:
    * @param pText Pointer to null-terminated string (from RAM)
    * @return Number of columns used by the string
    */
-  uint8_t drawString(uint8_t x, uint8_t y, const char *pText);
+  uint8_t drawString(uint8_t x, uint8_t y, const char *pText, bool inverseVideo = false);
 
   /**
    * @brief Draw text string stored in program memory (PROGMEM)
