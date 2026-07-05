@@ -17,7 +17,6 @@
 // stores min/max history in EEPROM, and broadcasts readings over nRF24L01.
 
 const int LED_PIN = PA0;  // PA0 leg 3 on DIP8 chip, used as status indicator
-const float ALTITUDE_METERS = 130.0f;  // Station altitude used for sea-level pressure conversion
 
 // Create global instances of peripheral managers used throughout the app.
 SPIManager spimgr;
@@ -42,11 +41,23 @@ const uint8_t TEMP_Y_POS = 8;
 const uint8_t PRESSURE_Y_POS = 24;
 const uint8_t HUMIDITY_Y_POS = 16;
 
+const uint16_t MENU_X_POSITION = 75;
+const uint16_t MENU_Y_POSITION = 24;
+const uint8_t MENU_BUFFER_LENGTH = 8;
+
+bool menuVisible = false;
+char buf[8];
+
 // Render the current temperature and min/max temperature values on the OLED.
 // The temperature is stored in tenths of a degree from the BME280 sensor.
 void displayTemperature(int16_t temp) {
-    char buf[8];
     curTemp = temp / 10;  // Convert to degrees Celsius with one decimal place
+
+    if (curTemp > 800) {
+        // false reading, ignore
+        return;
+    }
+
     if (temp < minTemp) {
         minTemp = temp;
         eeprom_update_word((uint16_t*)EEPROM_DATA_START + EEPROM_MIN_TEMP_OFFSET, minTemp);
@@ -87,10 +98,12 @@ void displayTemperature(int16_t temp) {
 // Render the current humidity and min/max humidity values on the OLED.
 // Humidity is converted from the BME280 raw value into a percent integer.
 void displayHumidity(uint16_t hum) {
-    char buf[5];
     curHumidity = hum / 100;  // Convert to percentage without decimal place
-    if (curHumidity < 0) curHumidity = 0;
-    if (curHumidity > 100) curHumidity = 99;
+
+    if (curHumidity > 90.0 || curHumidity < 1.0) {   
+        // false reading, ignore
+        return;
+    }
 
     if (curHumidity < minHumidity) {
         minHumidity = curHumidity;
@@ -122,27 +135,10 @@ void displayHumidity(uint16_t hum) {
     display.drawString(CUR_MEASURE_X_POS + 10 * FONT_CHAR_WIDTH + 2 * DISPLAY_TEXT_OFFSET, HUMIDITY_Y_POS, buf);
 }
 
-// Convert station pressure to an approximate sea-level pressure value.
-// The input pressure is expected in hPa and the temperature in degrees Celsius.
-static int16_t convertPressureToSeaLevel(float stationPressureHpa, float altitudeMeters, float temperatureC) {
-    const float lapseRate = 0.0065f;
-    const float temperatureK = temperatureC + 273.15f;
-    const float factor = 1.0f + (lapseRate * altitudeMeters) / temperatureK;
-    const float correction = factor * factor * factor * factor * factor;
-    return (int16_t)(stationPressureHpa * correction);
-}
-
 // Render the current pressure reading on the OLED.
 // Pressure from the sensor is provided in Pa and converted to hPa.
-void displayPressure(int32_t pres, float temperature) {
-    char buf[8];
-
-    //float stationPressureHpa = pres / 100.0f;
-    //int16_t seaLevelPressureHpa = convertPressureToSeaLevel(stationPressureHpa, ALTITUDE_METERS, temperature);
-    //curPressure = seaLevelPressureHpa;
-
+void displayPressure(int32_t pres) {
     curPressure = pres / 100.0f;
-
     itoa(curPressure, buf, 10);
     uint8_t l = strlen(buf);
     buf[l] = 'h';
@@ -160,10 +156,14 @@ void readBME280(bool update = true) {
 
     if (update) {
         displayTemperature(temp);
-        displayPressure(pres, temp / 100.0);
+        displayPressure(pres);
         displayHumidity(hum);
     }
 }
+
+const uint8_t JOYSTICK_VRY = 7;
+const uint8_t JOYSTICK_SW = 2;
+
 
 // Initialize all hardware and restore state from EEPROM.
 // This runs once when the microcontroller starts.
@@ -171,6 +171,10 @@ void setup() {
     // init LED to off
     GPIO_OUTPUT(A, 0);
     GPIO_SET_LOW(A, 0);
+
+    // configure joystick pins as input
+    GPIO_INPUT(A, JOYSTICK_VRY);  // VRY
+    GPIO_INPUT_PULLUP(B, JOYSTICK_SW);  // SW
 
 #ifdef HAS_INT0_SERIAL
     // Init serial interface on INT0 and PA7 pin with callback to INT0_SerialCommandMgr::serialInput
@@ -257,6 +261,7 @@ struct RadioMessage {
 
 // Send the latest temperature and humidity values over the nRF24L01 link.
 void sendRadioMessage() {
+    GPIO_SET_HIGH(A, 0);
     RadioMessage msg;
     msg.protocol = 'W';
     msg.version = '1';
@@ -267,7 +272,108 @@ void sendRadioMessage() {
     msg.timecode = milliseconds();
     uint8_t length = sizeof(RadioMessage);
     radio.send_binary((uint8_t*)(&msg), length);
+    _delay_ms(100);
+    GPIO_SET_LOW(A, 0);
 }
+
+
+enum JoystickDirection {
+    JOY_MIDDLE = 0,
+    JOY_UP = 1,
+    JOY_DOWN = 2,
+    
+};
+
+enum JoystickButtonState {
+    JOY_BUTTON_RELEASED = 1, // due to pullup, released state is HIGH (1)
+    JOY_BUTTON_PRESSED = 0
+};
+
+JoystickButtonState prevButtonState = JOY_BUTTON_RELEASED;
+JoystickDirection prevJoystickY = JOY_MIDDLE;
+
+uint8_t menuPosition = 0;  // Current position in the menu
+const uint8_t MENU_ITEM_COUNT = 4;  // Number of items in the menu
+const char* menuItems[MENU_ITEM_COUNT] = {
+    "Menu    ",
+    "Reset   ",
+    "Send    ",
+    "Exit    "
+};
+
+void menuCallback() {
+    // Handle menu actions based on the current menu position
+    switch (menuPosition) {
+        case 0:  // "Menu" selected
+            // No action needed, just display the menu
+            if (!menuVisible) {
+                menuVisible = true;
+                display.drawString(MENU_X_POSITION, MENU_Y_POSITION, " Menu   ", true);
+            }
+            break;
+        case 1:  // "Reset" selected
+            minTemp = 30000;
+            maxTemp = -10000;
+            minHumidity = 100;
+            maxHumidity = 0;
+            eeprom_update_word((uint16_t*)EEPROM_DATA_START + EEPROM_MIN_TEMP_OFFSET, minTemp);
+            eeprom_update_word((uint16_t*)EEPROM_DATA_START + EEPROM_MAX_TEMP_OFFSET, maxTemp);
+            eeprom_update_byte((uint8_t*)EEPROM_DATA_START + EEPROM_MIN_HUMIDITY_OFFSET, minHumidity);
+            eeprom_update_byte((uint8_t*)EEPROM_DATA_START + EEPROM_MAX_HUMIDITY_OFFSET, maxHumidity);
+            readBME280();
+            break;
+        case 2:  // "Send" selected
+            sendRadioMessage();
+            break;
+        case 3:  // "Exit" selected
+            menuVisible = false;
+            menuPosition = 0;
+            display.drawString(MENU_X_POSITION, MENU_Y_POSITION, "         ");  // Clear menu area on display
+            break;
+        default:
+            break;
+    }
+}
+
+void readJoystick() {
+    
+
+    // check if menu needs to be displayed - button state shall be different from previous state to avoid multiple toggles
+    JoystickButtonState sw = (JoystickButtonState) GPIO_READ(B, JOYSTICK_SW);
+    if (sw != prevButtonState) {
+        _delay_ms(100); // debounce delay
+        sw = (JoystickButtonState) GPIO_READ(B, JOYSTICK_SW);
+        if (sw == JOY_BUTTON_PRESSED) {
+            menuCallback();
+        }
+    }
+
+    // read joystick analog values
+    uint16_t yvalue = readADC(JOYSTICK_VRY);
+    JoystickDirection yDirection = JOY_MIDDLE;
+    if (yvalue < 200) {
+        yDirection = JOY_UP;
+    } else if (yvalue > 800) {
+        yDirection = JOY_DOWN;
+    }
+
+    if (yDirection != prevJoystickY) {
+        prevJoystickY = yDirection;
+        _delay_ms(50); // debounce delay
+        if (menuVisible) {
+            // Update menu based on joystick direction
+            if (yDirection == JOY_UP) {
+                // Scroll up in menu
+                menuPosition = (menuPosition - 1 + MENU_ITEM_COUNT) % MENU_ITEM_COUNT;
+            } else if (yDirection == JOY_DOWN) {
+                // Scroll down in menu
+                menuPosition = (menuPosition + 1) % MENU_ITEM_COUNT;
+            }
+            display.drawString(MENU_X_POSITION, MENU_Y_POSITION, menuItems[menuPosition], true);
+        }
+    }
+}
+
 
 const uint32_t MEASURE_INTERVAL_MS = 10000;  // Measure every 5 seconds
 uint32_t lastMeasureTime = 0;  // Initialize to 0 to trigger immediate measurement on startup
@@ -279,15 +385,12 @@ void loop(void) {
 
     if (currentMillis - lastMeasureTime >= MEASURE_INTERVAL_MS || lastMeasureTime == 0) {
         lastMeasureTime = currentMillis;
-        // blink LED while reading BME280
-        GPIO_SET_HIGH(A, 0);
         readBME280();
         sendRadioMessage();
-        _delay_ms(100);
-        GPIO_SET_LOW(A, 0);
     }
 
-    //_delay_ms(20000);
+    readJoystick();
+   
 
 #ifdef HAS_INT0_SERIAL
     // check if we have received a command over serial (INT0) and print it if so

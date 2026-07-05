@@ -41,6 +41,18 @@ Additional connections:
 - LED indicator on PA0
 - Optional INT0 serial on PA7 if `HAS_INT0_SERIAL` is enabled
 
+### Connection
+
+|         | AT84L | AT84R  |               |
+|--------:|:------|-------:|:--------------|
+| VCC     | 1     |     14 | GND           |
+| I2C SCL | 2 PB0 | PA0 13 | LED           |
+| I2C SDA | 3 PB1 | PA1 12 | NRF24 CE      |
+| RESET   | 4 PB3 | PA2 11 | NRF24 CSN     |
+| RX/SW   | 5 PB2 | PA3 10 |               |
+| TX/VRY  | 6 PA7 | PA4  9 | SPI CLK       |
+| SPI DI  | 7 PA6 | PA5  8 | SPI DO        |
+
 ## Build and Upload
 
 The project uses PlatformIO with the `attiny84` environment.
